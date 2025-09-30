@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Interpreter API Test Client</title>
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --text-color: #212529;
+            --primary-color: #0d6efd;
+            --border-color: #dee2e6;
+            --pre-bg-color: #e9ecef;
+            --error-color: #dc3545;
+            --success-color: #198754;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background: #fff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        h1, h2 {
+            text-align: center;
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        textarea {
+            height: 200px;
+            font-family: Consolas, "Courier New", monospace;
+            resize: vertical;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            background-color: var(--primary-color);
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            flex-grow: 1;
+        }
+        button:hover {
+            background-color: #0b5ed7;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        button.secondary {
+            background-color: #6c757d;
+        }
+        button.secondary:hover {
+            background-color: #5c636a;
+        }
+        #session-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #session-controls input {
+            flex-grow: 1;
+        }
+        #output-log {
+            margin-top: 25px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 15px;
+            height: 400px;
+            overflow-y: auto;
+            background-color: var(--bg-color);
+        }
+        .log-entry {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px dashed var(--border-color);
+        }
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+        pre {
+            background-color: var(--pre-bg-color);
+            padding: 10px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin: 5px 0;
+        }
+        .log-input pre {
+            background-color: #dbeafe;
+        }
+        .log-output pre, .log-output img {
+            background-color: #e9ecef;
+        }
+        .log-error pre {
+            background-color: #f8d7da;
+            color: var(--error-color);
+        }
+        .log-status {
+            font-style: italic;
+            color: #6c757d;
+        }
+        img.result-image {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid var(--border-color);
+            margin-top: 10px;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Code Interpreter Test Client</h1>
+
+    <h2>1. Configuration</h2>
+    <div class="form-group">
+        <label for="gateway-url">Gateway URL</label>
+        <input type="text" id="gateway-url" value="http://127.0.0.1:3874">
+    </div>
+    <div class="form-group">
+        <label for="auth-token">Auth Token (X-Auth-Token)</label>
+        <input type="text" id="auth-token" placeholder="Paste your token here">
+    </div>
+    <div class="form-group">
+        <label for="user-uuid">Current Session UUID</label>
+        <div id="session-controls">
+            <input type="text" id="user-uuid" readonly>
+            <button id="regenerate-uuid" class="secondary" title="Start a new session">New Session</button>
+        </div>
+    </div>
+
+    <h2>2. Code Execution</h2>
+    <div class="form-group">
+        <label for="code-input">Python Code</label>
+        <textarea id="code-input" placeholder="a = 10&#10;b = 20&#10;print(f'The sum is {a + b}')"></textarea>
+    </div>
+    <div class="button-group">
+        <button id="run-button">Run Code</button>
+        <button id="release-button" class="secondary">Release Session</button>
+    </div>
+
+    <h2>3. Session Log</h2>
+    <div id="output-log">
+        <div class="log-status">Ready to execute code...</div>
+    </div>
+</div>
+
+<script>
+    // --- DOM Elements ---
+    const gatewayUrlInput = document.getElementById('gateway-url');
+    const authTokenInput = document.getElementById('auth-token');
+    const userUuidInput = document.getElementById('user-uuid');
+    const codeInput = document.getElementById('code-input');
+    const runButton = document.getElementById('run-button');
+    const releaseButton = document.getElementById('release-button');
+    const regenerateUuidButton = document.getElementById('regenerate-uuid');
+    const outputLog = document.getElementById('output-log');
+
+    // --- Functions ---
+
+    /** Generates a v4 UUID */
+    function generateUUID() {
+        return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+            (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+        );
+    }
+
+    /** Clears the log and adds a message */
+    function clearLog(message) {
+        outputLog.innerHTML = `<div class="log-status">${message}</div>`;
+    }
+
+    /** Appends a new entry to the log */
+    function appendToLog(entry) {
+        const isScrolledToBottom = outputLog.scrollHeight - outputLog.clientHeight <= outputLog.scrollTop + 1;
+
+        const firstEntry = outputLog.querySelector('.log-status');
+        if (firstEntry) {
+            outputLog.innerHTML = '';
+        }
+        outputLog.appendChild(entry);
+
+        if (isScrolledToBottom) {
+            outputLog.scrollTop = outputLog.scrollHeight;
+        }
+    }
+
+    /** Creates a log entry element */
+    function createLogEntry(code, resultElement) {
+        const entryDiv = document.createElement('div');
+        entryDiv.className = 'log-entry';
+
+        const inputHeader = document.createElement('strong');
+        inputHeader.textContent = 'Input Code:';
+        const inputPre = document.createElement('pre');
+        inputPre.textContent = code;
+        const inputDiv = document.createElement('div');
+        inputDiv.className = 'log-input';
+        inputDiv.append(inputHeader, inputPre);
+
+        const outputHeader = document.createElement('strong');
+        outputHeader.textContent = 'Result:';
+        const outputDiv = document.createElement('div');
+        // 【修正】根据 resultElement 是否有 'log-error' class 来决定父 div 的 class
+        outputDiv.className = resultElement.classList.contains('log-error') ? 'log-error' : 'log-output';
+        outputDiv.append(outputHeader, resultElement);
+
+        entryDiv.append(inputDiv, outputDiv);
+        return entryDiv;
+    }
+
+    /** Handles code execution */
+    async function handleExecute() {
+        // 【修正】为所有输入都添加 .trim() 增加健壮性
+        const gatewayUrl = gatewayUrlInput.value.trim();
+        const authToken = authTokenInput.value.trim();
+        const userUuid = userUuidInput.value.trim();
+        const code = codeInput.value.trim();
+
+        if (!gatewayUrl || !authToken || !userUuid || !code) {
+            alert('Please fill in all fields: Gateway URL, Auth Token, and Code.');
+            return;
+        }
+
+        runButton.disabled = true;
+        runButton.textContent = 'Executing...';
+
+        let resultElement;
+        try {
+            const response = await fetch(`${gatewayUrl}/execute`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Auth-Token': authToken
+                },
+                body: JSON.stringify({
+                    user_uuid: userUuid,
+                    code: code
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                resultElement = document.createElement('pre');
+                // 【修正】直接给 resultElement 本身添加 class，而不是给它不存在的 parentElement
+                resultElement.classList.add('log-error');
+                resultElement.textContent = `Error ${response.status}: ${data.detail || JSON.stringify(data)}`;
+            } else {
+                if (data.result_base64) {
+                    resultElement = document.createElement('img');
+                    resultElement.className = 'result-image';
+                    resultElement.src = `data:image/png;base64,${data.result_base64}`;
+                } else {
+                    resultElement = document.createElement('pre');
+                    resultElement.textContent = data.result_text ?? '(No text output)';
+                }
+            }
+        } catch (error) {
+            resultElement = document.createElement('pre');
+            // 【修正】同样，直接给 resultElement 本身添加 class
+            resultElement.classList.add('log-error');
+            resultElement.textContent = `Network or fetch error: ${error.message}`;
+        } finally {
+            runButton.disabled = false;
+            runButton.textContent = 'Run Code';
+            if (resultElement) { // 确保 resultElement 存在
+                const logEntry = createLogEntry(code, resultElement);
+                appendToLog(logEntry);
+            }
+        }
+    }
+
+    /** Handles session release */
+    async function handleRelease() {
+        const gatewayUrl = gatewayUrlInput.value.trim();
+        const authToken = authTokenInput.value.trim();
+        const userUuid = userUuidInput.value.trim();
+
+        if (!gatewayUrl || !authToken || !userUuid) {
+            alert('Please provide Gateway URL and Auth Token.');
+            return;
+        }
+
+        releaseButton.disabled = true;
+        releaseButton.textContent = 'Releasing...';
+        try {
+            const response = await fetch(`${gatewayUrl}/release`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Auth-Token': authToken
+                },
+                body: JSON.stringify({ user_uuid: userUuid })
+            });
+
+            const data = await response.json();
+            const message = response.ok ? `Success: ${data.detail}` : `Error: ${data.detail}`;
+            clearLog(`Session ${userUuid} released. ${message}. Start a new session by clicking 'New Session'.`);
+
+        } catch (error) {
+            alert(`Failed to release session: ${error.message}`);
+        } finally {
+            releaseButton.disabled = false;
+            releaseButton.textContent = 'Release Session';
+        }
+    }
+
+    /** Starts a new session */
+    function startNewSession() {
+        userUuidInput.value = generateUUID();
+        clearLog(`New session started with UUID: ${userUuidInput.value}. Ready to execute code...`);
+    }
+
+    // --- Event Listeners ---
+    document.addEventListener('DOMContentLoaded', startNewSession);
+    runButton.addEventListener('click', handleExecute);
+    releaseButton.addEventListener('click', handleRelease);
+    regenerateUuidButton.addEventListener('click', startNewSession);
+
+</script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+# docker-compose.yml
+
+version: '3.8'
+
+services:
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    image: code-interpreter-gateway:latest
+    container_name: code-interpreter_gateway
+    restart: unless-stopped
+    ports:
+      # 映射 Gateway 对外端口，根据您的 Dockerfile，这里是 3874
+      - "3874:3874"
+    volumes:
+      # 将宿主机的 Docker socket 挂载到容器内，以便 Gateway 可以管理其他容器
+      - /var/run/docker.sock:/var/run/docker.sock
+      # 挂载一个卷用于持久化 auth_token
+      - gateway_data:/gateway
+    networks:
+      # [新增] 连接到外部网络（默认桥接），以便 Gateway 自身可以访问互联网
+      - code-interpreter-gateway-external-net
+      # [更新] 连接到内部隔离网络，以便 Gateway 可以与 Worker 通信
+      - code-interpreter-workers-isolated-net
+    environment:
+      # 确保 Gateway 知道要将 Worker 连接到哪个内部网络
+      - INTERNAL_NETWORK_NAME=code-interpreter_workers_isolated_net
+    depends_on:
+      - worker # 确保 worker 镜像被构建
+
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    image: code-interpreter-worker:latest
+    container_name: code-interpreter_worker_builder # 给 builder 容器一个固定名字，方便清理
+    entrypoint: /bin/true # 覆盖 ENTRYPOINT，使其立即退出
+    networks:
+      # [更新] 只连接到内部隔离网络。这个 builder 容器本身不应需要互联网
+      - code-interpreter-workers-isolated-net
+
+networks:
+  # [新增] Gateway 外部网络（标准桥接），允许 Gateway 访问互联网
+  code-interpreter-gateway-external-net:
+    driver: bridge
+    name: code-interpreter_gateway_external_net
+
+  # [新增 & 关键] Worker 内部隔离网络。internal: true 是隔离的关键！
+  code-interpreter-workers-isolated-net:
+    driver: bridge
+    internal: true # <--- 这一行是确保 Worker 无法联网的关键
+    name: code-interpreter_workers_isolated_net
+
+volumes:
+  gateway_data:
