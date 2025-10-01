@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 # 网关地址
 GATEWAY_URL = "http://127.0.0.1:3874"
 # 并发用户数 (同时模拟多少个用户)
-NUM_CONCURRENT_USERS = 30
+NUM_CONCURRENT_USERS = 25
 # 每个用户的请求总数 (必须大于等于3，以完整执行一个场景)
 REQUESTS_PER_USER = 100
 # 两次请求之间的思考时间 (秒)，模拟真实用户行为

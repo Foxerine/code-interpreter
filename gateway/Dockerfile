@@ -13,5 +13,13 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.
 
 COPY . /gateway
 
+# --- 新增 ---
+# 复制启动脚本并给予执行权限
+COPY ./start_gateway.sh /gateway/start_gateway.sh
+RUN chmod +x /gateway/start_gateway.sh
+
 EXPOSE 3874
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3874"]
+
+# --- 修改 ---
+# 将CMD修改为ENTRYPOINT，以运行我们的启动脚本
+ENTRYPOINT ["/gateway/start_gateway.sh"]

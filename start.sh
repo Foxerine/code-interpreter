@@ -1,45 +1,74 @@
 #!/bin/bash
 
-# 设置脚本在遇到错误时立即停止
+# Set the script to exit immediately if any command fails
 set -e
 
-# --- 新增检查 ---
-# 定义关键容器的名称，以便于未来修改
+# --- Color Definitions ---
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# --- Check if already running ---
 CONTAINER_NAME="code-interpreter_gateway"
+echo -e "🔎 Checking status of container '${CONTAINER_NAME}'..."
 
-echo "🔎 Checking status of container '$CONTAINER_NAME'..."
-
-# 检查网关容器是否已经在运行
-# 使用 -q 只输出ID，使用正则表达式 `^...$` 进行精确匹配
-GATEWAY_ID=$(docker ps -q --filter "name=^${CONTAINER_NAME}$")
-
-if [[ -n "$GATEWAY_ID" ]]; then
-    echo "✅ The Code Interpreter gateway is already running. No action taken."
+# docker ps -q returns the container ID if it's running
+if [ -n "$(docker ps -q --filter "name=^${CONTAINER_NAME}$")" ]; then
+    echo -e "${GREEN}✅ The Code Interpreter gateway is already running. No action taken.${NC}"
+    # --- MODIFICATION: Fetch and display the token even if it's already running ---
+    echo -e "\n🔑 Retrieving existing Auth Token..."
+    TOKEN=$(docker exec ${CONTAINER_NAME} cat /gateway/auth_token.txt)
+    echo -e "Your Auth Token is: ${YELLOW}${TOKEN}${NC}"
     exit 0
 else
-    echo "   -> Container is not running. Proceeding with startup."
+    echo -e "   -> Container is not running. Proceeding with startup."
 fi
-# --- 检查结束 ---
 
-
-echo "🚀 [Step 1/2] Starting the Code Interpreter environment..."
-# 使用 --build 确保镜像总是最新的
-# 使用 -d 在后台运行
+# --- Step 1: Start Docker Compose ---
+echo -e "\n🚀 ${GREEN}[Step 1/3] Starting the Code Interpreter environment...${NC}"
+# Use --build to ensure images are up-to-date
+# Use -d to run in the background
 docker-compose up --build -d
 
-echo "✅ Environment started. Gateway is running."
-echo "🧹 [Step 2/2] Cleaning up the temporary builder container..."
+# --- Step 2: Clean up builder container ---
+echo -e "\n🧹 ${CYAN}[Step 2/3] Cleaning up the temporary builder container...${NC}"
 
-# 查找名为 code-interpreter_worker_builder 的容器
+# Find the builder container ID
 BUILDER_ID=$(docker ps -a -q --filter "name=code-interpreter_worker_builder")
 
-if [[ -n "$BUILDER_ID" ]]; then
+if [ -n "$BUILDER_ID" ]; then
     echo "   -> Found builder container. Removing it..."
     docker rm "$BUILDER_ID" > /dev/null
-    echo "   -> Builder container successfully removed."
+    echo -e "   -> ${GREEN}Builder container successfully removed.${NC}"
 else
-    echo "   -> No temporary builder container found to clean up. Skipping."
+    echo -e "   -> ${YELLOW}No temporary builder container found to clean up. Skipping.${NC}"
 fi
 
-echo "🎉 Startup complete. The system is ready."
-echo "🔑 To get your auth token, check gateway container log or run: docker exec code-interpreter_gateway cat /gateway/auth_token.txt"
+# --- Step 3: Wait for and retrieve the Auth Token ---
+echo -e "\n🔑 ${CYAN}[Step 3/3] Waiting for Gateway to generate the Auth Token...${NC}"
+
+TOKEN=""
+# Poll for 30 seconds (1-second intervals) for the token file to be created
+for i in {1..30}; do
+    # Try to get the token, suppress "No such file or directory" errors
+    TOKEN=$(docker exec ${CONTAINER_NAME} cat /gateway/auth_token.txt 2>/dev/null || true)
+    if [ -n "$TOKEN" ]; then
+        break
+    fi
+    echo -n "."
+    sleep 1
+done
+
+echo "" # Newline after the dots
+
+if [ -z "$TOKEN" ]; then
+    echo -e "\n${RED}❌ Timed out waiting for the Auth Token.${NC}"
+    echo -e "   Please check the gateway container logs with: ${YELLOW}docker logs ${CONTAINER_NAME}${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}✅ Token successfully retrieved!${NC}"
+echo -e "\n🎉 ${GREEN}Startup complete. The system is ready.${NC}"
+echo -e "Your Auth Token is: ${YELLOW}${TOKEN}${NC}"

@@ -1,7 +1,4 @@
 # docker-compose.yml
-
-version: '3.8'
-
 services:
   gateway:
     build:
@@ -20,12 +17,16 @@ services:
       - gateway_data:/gateway
     networks:
       # [新增] 连接到外部网络（默认桥接），以便 Gateway 自身可以访问互联网
-      - code-interpreter-gateway-external-net
+      code-interpreter-gateway-external-net:
+        ipv4_address: 172.29.0.100
       # [更新] 连接到内部隔离网络，以便 Gateway 可以与 Worker 通信
-      - code-interpreter-workers-isolated-net
+      code-interpreter-workers-isolated-net:
+        ipv4_address: 172.28.0.2
     environment:
       # 确保 Gateway 知道要将 Worker 连接到哪个内部网络
       - INTERNAL_NETWORK_NAME=code-interpreter_workers_isolated_net
+      - GATEWAY_EXTERNAL_IP=172.29.0.100
+      - GATEWAY_INTERNAL_IP=172.28.0.2
     depends_on:
       - worker # 确保 worker 镜像被构建
 
@@ -45,12 +46,20 @@ networks:
   code-interpreter-gateway-external-net:
     driver: bridge
     name: code-interpreter_gateway_external_net
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.29.0.0/16
 
   # [新增 & 关键] Worker 内部隔离网络。internal: true 是隔离的关键！
   code-interpreter-workers-isolated-net:
     driver: bridge
     internal: true # <--- 这一行是确保 Worker 无法联网的关键
     name: code-interpreter_workers_isolated_net
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16
 
 volumes:
   gateway_data:

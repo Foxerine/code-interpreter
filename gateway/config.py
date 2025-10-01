@@ -49,3 +49,7 @@ WORKER_IDLE_TIMEOUT: int = 3600  # 1 hour
 
 # How often the background task runs to check for timed-out workers.
 RECYCLING_INTERVAL: int = 300  # 5 minutes
+
+MAX_EXECUTION_TIMEOUT: float = 15.0 # 15 secs
+
+GATEWAY_INTERNAL_IP = os.environ.get("GATEWAY_INTERNAL_IP", "172.28.0.2")

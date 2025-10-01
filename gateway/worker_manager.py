@@ -51,6 +51,7 @@ class WorkerManager:
             max_total_workers: int,
             worker_idle_timeout: int,
             recycling_interval: int,
+            gateway_internal_ip: str
     ) -> None:
         cls.WORKER_IMAGE_NAME = worker_image_name
         cls.INTERNAL_NETWORK_NAME = internal_network_name
@@ -58,6 +59,7 @@ class WorkerManager:
         cls.MAX_TOTAL_WORKERS = max_total_workers
         cls.WORKER_IDLE_TIMEOUT = worker_idle_timeout
         cls.RECYCLING_INTERVAL = recycling_interval
+        cls.GATEWAY_INTERNAL_IP = gateway_internal_ip
 
         cls._creation_semaphore = asyncio.Semaphore(cls.MAX_TOTAL_WORKERS)
         cls._shutdown_event.clear()
@@ -153,11 +155,16 @@ class WorkerManager:
             container = await cls.docker.containers.create_or_replace(
                 config={
                     'Image': cls.WORKER_IMAGE_NAME,
+                    'Env': [
+                        f"GATEWAY_INTERNAL_IP={cls.GATEWAY_INTERNAL_IP}"
+                    ],
                     'HostConfig': {
                         'NetworkMode': cls.INTERNAL_NETWORK_NAME,
                         # 新增：资源限制
                         'Memory': 1024 * 1024 * 1024,  # 512MB
                         'CpuShares': 1024,
+                        'Links': ['code-interpreter_gateway:gateway'],
+                        'CapAdd': ['NET_ADMIN', 'NET_RAW']
                     },
                     'Labels': {
                         'managed-by': "code-interpreter-gateway",

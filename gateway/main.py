@@ -27,6 +27,7 @@ async def lifespan(app: FastAPI):
         max_total_workers=config.MAX_TOTAL_WORKERS,
         worker_idle_timeout=config.WORKER_IDLE_TIMEOUT,
         recycling_interval=config.RECYCLING_INTERVAL,
+        gateway_internal_ip=config.GATEWAY_INTERNAL_IP
     )
 
     # Start the background task
@@ -84,9 +85,16 @@ async def execute(request: ExecuteRequest) -> ExecuteResponse:
             response = await client.post(
                 f"{worker.internal_url}/execute",
                 json=worker_request_body,
-                timeout=30.0 # A reasonable timeout for the whole operation
+                timeout=config.MAX_EXECUTION_TIMEOUT # A reasonable timeout for the whole operation
             )
             # Forward the worker's response (both success and error)
+            if response.status_code == 503:
+                await WorkerManager.release_worker_by_user(request.user_uuid)
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail="The code resulted in an execution timeout. The environment has been reset, please try again."
+                )
+
             if response.status_code != 200:
                 error_detail = response.json().get("detail", "Worker returned an unknown error.")
                 raise HTTPException(status_code=response.status_code, detail=error_detail)
@@ -108,11 +116,13 @@ async def release(request: ReleaseRequest):
     await WorkerManager.release_worker_by_user(request.user_uuid)
     return ReleaseResponse(status="ok", detail=f"Worker for user {request.user_uuid} has been released.")
 
-@app.get("/status")
+@app.get(
+    "/status",
+    dependencies=[Depends(verify_token)],
+)
 async def get_status():
     return {
         "total_workers": len(WorkerManager.workers),
         "busy_workers": len(WorkerManager.user_to_worker_map),
-        "idle_workers_in_pool": WorkerManager.idle_workers.qsize(),
         "is_initializing": WorkerManager._is_initializing,
     }

@@ -9,13 +9,14 @@ ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     PYTHONUNBUFFERED=1
 
-# [新增] 创建沙箱目录，这将是代码执行的默认工作区
-RUN mkdir /sandbox
-
 # Install system dependencies
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends supervisor tini fontconfig libgl1-mesa-glx libglib2.0-0 curl && \
+    apt-get install -y --no-install-recommends supervisor tini fontconfig libgl1-mesa-glx libglib2.0-0 curl iptables && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN useradd --create-home --shell /bin/bash sandbox && \
+    mkdir /sandbox && \
+    chown -R sandbox:sandbox /sandbox
 
 # Install font
 COPY ./assets/simhei.ttf /usr/share/fonts/truetype/
@@ -34,8 +35,12 @@ RUN ipython kernel install --name "python3" --user
 COPY . /worker
 COPY ./supervisor/supervisord.conf /etc/supervisor/supervisord.conf
 
+COPY ./entrypoint.sh /worker/entrypoint.sh
+RUN chmod +x /worker/entrypoint.sh
+
 # [更新] 将最终的工作目录切换到沙箱
 WORKDIR /sandbox
 
 EXPOSE 8000
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
+ENTRYPOINT ["/worker/entrypoint.sh"]
+

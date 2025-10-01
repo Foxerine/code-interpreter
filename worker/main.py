@@ -47,12 +47,21 @@ async def execute_python_code(request: ExecuteRequest) -> ExecuteResponse:
             result_text=result.value if result.type != 'image_png_base64' else None,
         )
     elif result.status == "timeout":
-        l.warning("Code execution timed out. Triggering kernel auto-reset.")
-        asyncio.create_task(JupyterKernelManager.reset_kernel())
+        # todo 引入更完善的自愈机制，现在的机制感觉有点惩罚用户，因为会失去所有的状态
+
+        # l.warning("Code execution timed out. Triggering kernel auto-reset.")
+        # asyncio.create_task(JupyterKernelManager.reset_kernel())
+        # raise HTTPException(
+        #     status_code=status.HTTP_400_BAD_REQUEST,
+        #     detail=f"Code execution timed out after {JupyterKernelManager.EXECUTION_TIMEOUT} seconds. Environment has been reset.",
+        # )
+
+        l.error("FATAL: Code execution timed out. This worker instance is now considered unhealthy.")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Code execution timed out after {JupyterKernelManager.EXECUTION_TIMEOUT} seconds. Environment has been reset.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Code execution timed out. This worker instance is now considered unhealthy and should be killed. ",
         )
+
     else:  # status == "error"
         l.warning(f"Python execution failed. Type: {result.type}, Message: {result.value}")
         raise HTTPException(
