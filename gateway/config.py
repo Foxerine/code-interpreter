@@ -38,7 +38,7 @@ WORKER_IMAGE_NAME: str = "code-interpreter-worker:latest" # Docker compose creat
 
 # --- Pool Sizing ---
 # The minimum number of idle workers to keep ready in the pool.
-MIN_IDLE_WORKERS: int = 2
+MIN_IDLE_WORKERS: int = 5
 
 # The absolute maximum number of concurrent workers allowed.
 MAX_TOTAL_WORKERS: int = 30

@@ -1,27 +1,45 @@
 #!/bin/bash
 
-echo "🛑 Initiating shutdown sequence for the Code Interpreter environment..."
+# 设置脚本在遇到错误时立即停止
+set -e
 
-echo "🤚 [Step 1/3] Stopping the gateway container to prevent new workers..."
-# 第一次 down 会停止并移除 gateway。网络删除失败是正常的，因为还有 worker 连着。
-docker-compose down --remove-orphans > /dev/null 2>&1
-echo "   -> Gateway stopped."
+# --- 新增检查 ---
+# 定义关键容器的名称，以便于未来修改
+CONTAINER_NAME="code-interpreter_gateway"
 
-echo "🔥 [Step 2/3] Finding and forcibly removing all dynamically created workers..."
-WORKER_IDS=$(docker ps -a -q --filter "label=managed-by=code-interpreter-gateway")
+echo "🔎 Checking status of container '$CONTAINER_NAME'..."
 
-if [[ -n "$WORKER_IDS" ]]; then
-    echo "   -> Found running worker containers. Removing them now..."
-    # docker rm -f $WORKER_IDS 可能会因为换行符出问题，用 xargs 更稳健
-    echo "$WORKER_IDS" | xargs docker rm -f > /dev/null
-    echo "   -> All dynamic workers have been removed."
+# 检查网关容器是否已经在运行
+# 使用 -q 只输出ID，使用正则表达式 `^...$` 进行精确匹配
+GATEWAY_ID=$(docker ps -q --filter "name=^${CONTAINER_NAME}$")
+
+if [[ -n "$GATEWAY_ID" ]]; then
+    echo "✅ The Code Interpreter gateway is already running. No action taken."
+    exit 0
 else
-    echo "   -> No dynamically created workers found."
+    echo "   -> Container is not running. Proceeding with startup."
+fi
+# --- 检查结束 ---
+
+
+echo "🚀 [Step 1/2] Starting the Code Interpreter environment..."
+# 使用 --build 确保镜像总是最新的
+# 使用 -d 在后台运行
+docker-compose up --build -d
+
+echo "✅ Environment started. Gateway is running."
+echo "🧹 [Step 2/2] Cleaning up the temporary builder container..."
+
+# 查找名为 code-interpreter_worker_builder 的容器
+BUILDER_ID=$(docker ps -a -q --filter "name=code-interpreter_worker_builder")
+
+if [[ -n "$BUILDER_ID" ]]; then
+    echo "   -> Found builder container. Removing it..."
+    docker rm "$BUILDER_ID" > /dev/null
+    echo "   -> Builder container successfully removed."
+else
+    echo "   -> No temporary builder container found to clean up. Skipping."
 fi
 
-echo "🧹 [Step 3/3] Final cleanup to remove the network..."
-# 因为 worker 已经被清理，这次 down 将成功移除网络和 builder
-docker-compose down --remove-orphans > /dev/null 2>&1
-echo "   -> Network and remaining resources cleaned up."
-
-echo "✅ Shutdown and cleanup complete."
+echo "🎉 Startup complete. The system is ready."
+echo "🔑 To get your auth token, check gateway container log or run: docker exec code-interpreter_gateway cat /gateway/auth_token.txt"

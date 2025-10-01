@@ -4,14 +4,18 @@
 
 ```
 ├── .gitignore
-├── AGENTS.md
 ├── README.md
+├── README_zh.md
+├── _test.py
 ├── docker-compose.yml
 ├── generate_project_text.py
 ├── project_text.md
 ├── start.ps1
+├── start.sh
 ├── stop.ps1
+├── stop.sh
 ├── test.html
+├── test_concurrent.py
 ├── gateway/
 │   ├── Dockerfile
 │   ├── config.py
@@ -20,6 +24,16 @@
 │   ├── requirements.txt
 │   ├── utils.py
 │   └── worker_manager.py
+├── images/
+│   ├── 1_test_summary_pie_chart.png
+│   ├── 2_latency_distribution_chart.png
+│   ├── 3_failure_analysis_bar_chart.png
+│   ├── docker_desktop_screenshot.png
+│   ├── high_level_architecture_en.png
+│   ├── high_level_architecture_zh.png
+│   ├── img_test_page.png
+│   ├── request_flow_sequence_en.png
+│   └── request_flow_sequence_zh.png
 ├── worker/
 │   ├── Dockerfile
 │   ├── dto.py
@@ -36,156 +50,330 @@
 
 --- 
 
-`AGENTS.md`
+`README.md`
 
 ```markdown
-# 代码规范 aka agents.md
+# Code Interpreter - Stateful, High-Performance, Scalable, and Secure Python Sandbox
 
-## 基础格式规范
-- 所有的代码文件必须使用UTF-8编码
-- 所有的代码文件必须使用4个空格缩进，不允许使用Tab缩进
-- PR/commit时不要有任何语法错误（红线）
-- 文件末尾必须有一个换行符
-- 使用PyCharm默认的代码规范（变量命名，类命名，换行，空格，注释）（在默认情况下不要出现黄线，明显是linter的错误的除外）
+This project is an API-driven Python code execution sandbox. It utilizes a centralized **API Gateway** and a dynamic **Worker Pool** architecture to provide each user with a completely isolated, stateful Python execution session.
 
-## 类型注解规范
-- 所有的类型注解都必须使用Python 3.10+的简化语法
-    - 例如：使用 `dict[str, Any] | None` 而不是 `Optional[Dict[str, Any]]`
-    - **唯一例外**：用字符串表示可空的类型标注时，不能用 `"TypeName" | None`（这是语法错误），必须使用 `Optional['TypeName']`
-- 参数、类变量、实例变量等必须有类型注解，函数返回必须要注明类型
-- 所有的类型注解都必须是明确的类型，不能使用 `Any` 或 `object`，除非确实无法确定类型，  
-  需要明确使用todo标注，以便后期研究类型
-- 所有的类型注解都必须是具体的类型，不能使用泛型（如 `List`、`Dict`、`Tuple`、`Set`、`Union` 等）  
-  必须使用具体的类型（如 `list[int]`、`dict[str, Any]`、`tuple[int, str]`、`set[str]`、`int | str` 等）
-- 所有的类型注解都必须是导入的类型，不能使用字符串表示类型（如 `def func(param: 'CustomType') -> 'ReturnType':`）  
-  除非是**前向引用**（即类型在当前作用域中还未定义）
+Each worker instance runs in a separate Docker container with resource and network limitations. It maintains the code execution context through an internal Jupyter Kernel, offering ultimate security, session continuity, and high performance.
 
-## 异步编程规范
-- 使用FastAPI管理的事件循环，不要再新建任何事件循环，不论是在任何线程或任何子进程中
-- IO操作必须使用协程，不涉及任何CPU密集或IO的操作必须不使用协程，按需使用to_thread线程或Celery Worker
-- 所有的数据库操作必须使用异步数据库驱动（如SQLModel的AsyncSession），不允许使用同步数据库驱动
-- 所有的HTTP请求必须使用异步HTTP客户端（如aiohttp），不允许使用同步HTTP客户端
-- 所有的文件操作必须使用异步文件操作库（如aiofiles），不允许使用同步文件操作
-- 所有的子进程操作必须使用异步子进程库（如anyio），不允许使用同步子进程库
-- 所有的第三方库调用必须使用异步版本，不允许使用同步版本，如果没有同步版本，视cpu负载情况使用to_thread线程或Celery Worker
-- 所有的高cpu阻塞操作必须使用to_thread线程或Celery Worker，不允许在协程中直接调用高cpu阻塞操作
+## Core Features
 
-## 函数与参数规范
-- 一个方法最多五个参数，多了考虑拆分方法或合并参数（SQLModel），不要简单的用tuple或dict
+-   **Stateful Sessions**: Each user (identified by `user_uuid`) is uniquely mapped to a worker instance during their session. This ensures that variables, function definitions, and imported packages are persisted across consecutive API requests.
 
-## 代码格式规范
-- **容器类型定义**：元组、字典、列表定义时，若定义只用了一行，则最后一个元素后面一律不加逗号，否则一律加逗号
-- **括号换行**：括号要么不换行，要么换行且用下面的形式写（一行最多一个变量，以逗号和换行分割）
+-   **Ultimate Isolation & Security**:
+    -   **Centralized Access Control**: All requests must pass through the API Gateway, which handles unified token authentication. Worker instances are not directly exposed to the public.
+    -   **Network Isolation**: All worker instances run within a **completely isolated internal Docker network**. This means workers cannot access the internet, nor can they be accessed directly from external networks, effectively preventing data leaks and malicious network attacks.
+    -   **Process/Resource Isolation**: Each worker instance operates in its own Docker container, achieving OS-level resource isolation.
 
-### 示例代码
-```python
-from loguru import logger as l
+-   **High Performance & Concurrency**:
+    -   **Pooling Architecture**: The system maintains a pre-warmed pool of idle worker instances. When a user makes their first request, the gateway instantly allocates an instance from the pool, achieving near-zero latency for sandbox environment acquisition.
+    -   **Fully Asynchronous Design**: Both the Gateway and Workers are built with FastAPI, making the entire request-handling pipeline asynchronous and capable of managing a high volume of concurrent requests.
 
-from api_client_models import (
-    AgentModelsRequest,
-    ReportRequest,
-    SaveMemoryRequest,
-    UserInfoResponse,
-)
+-   **High Robustness & Self-Healing**:
+    -   **Health Checks**: The gateway performs strict health checks on worker instances before creating and assigning them, ensuring all internal services are fully operational.
+    -   **Timeout Auto-Reset**: If code execution exceeds a predefined threshold, the Jupyter Kernel within the worker instance is automatically reset to prevent infinite loops or long-running operations from overwhelming the environment.
+    -   **Idle Auto-Recycling**: A background task in the gateway periodically checks for and recycles instances that have been inactive for too long, automatically freeing up resources and maintaining the minimum number of idle instances in the pool.
+    -   **Proactive Session Release**: The `/release` endpoint allows users to actively terminate their sessions and immediately destroy the associated instance, freeing up resources on demand.
 
-async def lookup_user_info(
-        session: AsyncSession,
-        user_id: int,
-        short_name: str,
-        data_1_with_a_long_name: dict[str, Any] | None,
-        data_2_with_a_even_longer_name: CustomType
-) -> UserInfoResponse:
-    user = await User.get(session, User.id == user_id)
-    new_dict = { user_id, short_name }
-    l.debug(f"查到的数据: {new_dict}")
-    result = UserInfoResponse(
-        user.id,
-        user.a_long_attribute,
-        data_1_with_a_long_name,
-        data_2_with_a_even_longer_name,
-    )
+## Architecture Overview
 
-    return result
+The project consists of two main components: the **API Gateway** and the **Worker Instance**.
+
+1.  **API Gateway**
+    *   Serves as the single entry point for all external API requests.
+    *   **Authentication Hub**: Validates the `X-Auth-Token` in all request headers.
+    *   **Worker Pool Manager (`WorkerManager`)**:
+        *   Maintains a pool of `Worker` containers, including a minimum number of idle instances.
+        *   When a request from a new user is received, it takes an idle instance from the pool and binds it to the user's `user_uuid`.
+        *   Dynamically creates new instances if the pool is empty and the total number of workers is below the maximum limit.
+        *   Manages the entire lifecycle of instances, including creation, health checks, idle recycling, and destruction.
+    *   **Request Proxying**: Transparently proxies authenticated and assigned requests to the corresponding internal worker instance.
+
+2.  **Worker Instance**
+    *   A standardized, self-contained Docker container that serves as the actual code execution unit.
+    -   Inside the container, `Supervisor` manages two core processes:
+        *   **Jupyter Kernel**: Provides a stateful Python runtime environment, which is key to achieving session continuity.
+        *   **FastAPI Service**: Exposes a simple internal HTTP API (`/execute`, `/reset`, `/health`) to receive commands from the Gateway.
+    *   **Kernel Manager (`JupyterKernelManager`)**:
+        *   The FastAPI service uses this module to interact with the Jupyter Kernel, sending code via WebSocket and capturing output, images, or errors in real-time.
+
+### High-Level System Architecture
+
+This diagram illustrates the overall system layout, emphasizing the core security design of "public access" versus "internal isolation" and depicting the relationships between the main components.
+
+![high_level_architecture_en.png](images/high_level_architecture_en.png)
+
+### Core Request Flow (`/execute` endpoint)
+
+This sequence diagram details the complete top-to-bottom call chain within the system when a **new user** first initiates a code execution request, clearly showing the interaction sequence and logic between components.
+
+![request_flow_sequence_en.png](images/request_flow_sequence_en.png)
+
+## Quick Start
+
+### 1. Prerequisites
+
+-   [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docker.com/compose/) are installed and running correctly.
+-   An HTTP client that can send requests (e.g., cURL, Postman, or Python's `httpx` library).
+-   For Linux/macOS users, Bash or Zsh is recommended.
+-   For Windows users, PowerShell is required.
+
+### 2. Start the Service
+
+This project provides wrapper scripts to simplify the deployment process and hide the complexity of `docker-compose`. Please **do not** run `docker-compose up` directly.
+
+-   **For Linux / macOS Users:**
+    Open a terminal and run the following command in the project root directory:
+    ```bash
+    sh start.sh
+    ```
+
+-   **For Windows Users:**
+    Open PowerShell and run the following command in the project root directory:
+    ```powershell
+    .\start.ps1
+    ```
+The script will automatically build the images, start the services, and clean up any temporary containers. Once started, the gateway will listen for requests on `http://127.0.0.1:3874`.
+
+### 3. Get the Auth Token
+
+When the service starts for the first time, a unique authentication token is automatically generated (you can also find it in the logs of the `gateway` container). You can retrieve it from the running gateway container with the following command:
+
+```bash
+docker exec code-interpreter_gateway cat /gateway/auth_token.txt
 ```
+Please copy this token for use in subsequent API requests.
+You can open the `test.html` file in the project directory to test the API, or use the Python example code below.
 
-## 文档与注释规范
-- 复杂的类或函数（无法从名字推断明确的操作，如 `handle_connection()`）一律要写docstring，采用reStructuredText风格
+### 4. Stop the Service
 
-## 字符串处理规范
-- **引号使用**：单引号 `'` 用于给电脑看的文本（字典的键），双引号 `"` 用于给人看的文本（面向用户的提示，面向开发者的注释、log信息等）
-- **字符串格式化**：所有的字符串都用f-string格式化，不要使用 `%` 或 `.format()`
-- **多行字符串**：多行字符串使用"""或'''，"""给人看(如docstring)，'''给电脑看（如SQL语句或HTML内容）
+When you are finished, please use the corresponding stop script to completely shut down and clean up all resources, including the dynamically created worker containers.
 
-## 命名规范
-- 除非专有名词，代码中不要出现任何拼音变量名，所有变量名必须是英文
-- 所有的变量名、函数名、方法名、参数名都必须使用蛇形命名法（snake_case）
-- 所有的类名都必须使用帕斯卡命名法（PascalCase）
-- 所有的常量名都必须使用全大写蛇形命名法（UPPER_SNAKE_CASE）
-- 所有的私有变量、私有方法都必须使用单下划线前缀（_private_var）
-- 所有的非常私有变量、非常私有方法都必须使用双下划线前缀（__very_private_var）
-- 所有的布尔变量都必须使用is_、has_、can_、should_等前缀命名，且变量名必须是形容词或动词短语（如 is_valid, has_data, can_execute, should_retry）
+-   **For Linux / macOS Users:**
+    ```bash
+    sh stop.sh
+    ```
 
-## 异常处理规范
-- 所有的异常都必须被捕获，且要有明确的处理逻辑
-- 如果出现错误，不要return None，这样会造成隐藏的不易发现的错误，必须明确抛出异常
+-   **For Windows Users:**
+    ```powershell
+    .\stop.ps1
+    ```
 
-## 日志处理规范
-- 所有的日志都必须用 `from loguru import logger as l` 处理，不要使用print
-- 所有的日志都必须有明确的上下文，且要有明确的日志级别
+## API Documentation
 
-## 框架的使用
-- 使用SQLModel，而不是Pydantic或SQLAlchemy。使用SQLModel时禁止从future导入annotations
-- 使用FastAPI，而不是Flask或Django
-- 使用Aiohttp，而不是Requests
-- 使用Aiofiles，而不是内置的open
-```python
-import os as sync_os
-from aiofiles import os, open
-...
-async with open('file.txt', 'r') as f:
-    content = await f.read()
-...
-path = sync_os.path(...)
-```
-- 使用Anyio，而不是内置的subprocess
-- 使用Loguru，而不是内置的logging
-  `from loguru import logger as l`
-- 使用Celery，而不是内置的multiprocessing
-- 使用GitHub Desktop，而不是直接在文件系统操作
-- 使用PyCharm，而不是其他IDE
+All API requests should be sent to the Gateway address (default: `http://127.0.0.1:3874`).
 
-## AI编码
-- 如果有条件，inline completion插件使用GitHub Copilot，而不是JetBrains自带的
-- 如果让AI直接编码，使用Gemini 2.5 Pro及以上, Claude 3.7 Sonnet Thinking及以上，而不是GPT系列模型，DeepSeek，豆包，文心一言等
-- 使用AI生成代码时，提示词必须带上这个代码规范
-- 在实现任何功能前，必须先看看有没有现成的解决方案，比如pypi包，不要重复造轮子
+### Authentication
 
-# SQLModel规范
-- 使用字段后面的"""..."""（docstring）而不是参数description="..."来写字段描述
-  例如：
-```python
-class User(SQLModel, table=True):
-    model_config = ConfigDict(use_attribute_docstrings=True)
+All endpoints require an authentication token to be provided in the HTTP request header.
+-   **Header**: `X-Auth-Token`
+-   **Value**: `<your-auth-token>`
 
-    id: int = Field(default=None, primary_key=True, description="用户ID")  # 错误示范
-    name: str = Field(description="用户名")  # 错误示范
-    email: str = Field(unique=True)  # 正确示范
-    """用户邮箱"""
-```
-
-  
 ---
 
-**注意**：此规范会持续更新，对此文件有任何建议修改可以发起PR，没有在规范里提到的都没有硬性要求，可以参考[PEP 8](https://peps.python.org/pep-0008/)
+### 1. Execute Code
 
+Executes a snippet of Python code within a user's session.
+
+-   **Endpoint**: `POST /execute`
+-   **Description**: Assigns a worker instance to the specified `user_uuid` (if one doesn't already exist) and then executes the code in that instance. Subsequent requests with the same `user_uuid` will be executed in the same instance, thus maintaining state.
+-   **Request Body**:
+    ```json
+    {
+      "user_uuid": "string",
+      "code": "string"
+    }
+    ```
+    -   `user_uuid` (string, required): A unique identifier for the user. A UUID is recommended.
+    -   `code` (string, required): The Python code string to be executed.
+
+-   **Success Response (200 OK)**:
+    ```json
+    {
+      "result_text": "string | null",
+      "result_base64": "string | null"
+    }
+    ```
+    -   `result_text`: The standard output (stdout) of the code or the text representation of the last expression.
+    -   `result_base64`: If the code generates an image (e.g., using matplotlib), this field will contain the Base64-encoded string of the PNG image.
+
+-   **Error Responses**:
+    -   `400 Bad Request`: Code execution failed (e.g., syntax error) or timed out.
+    -   `401 Unauthorized`: The authentication token is invalid or missing.
+    -   `503 Service Unavailable`: The worker pool is full or initializing, and no worker is currently available.
+
+---
+
+### 2. Release Session
+
+Proactively ends a user's session and destroys its associated worker instance.
+
+-   **Endpoint**: `POST /release`
+-   **Description**: Immediately recycles the resources occupied by the specified `user_uuid`. If not called, the instance will be automatically recycled by the system after a period of inactivity.
+-   **Request Body**:
+    ```json
+    {
+      "user_uuid": "string"
+    }
+    ```
+    -   `user_uuid` (string, required): The user identifier for the session to be released.
+
+-   **Success Response (200 OK)**:
+    ```json
+    {
+      "status": "ok",
+      "detail": "Worker for user <user_uuid> has been released."
+    }
+    ```
+
+---
+
+### 3. Get System Status (Admin Interface)
+
+Queries the current status of the worker pool.
+
+-   **Endpoint**: `GET /status`
+-   **Description**: Returns summary information about the number and status of worker instances, mainly for monitoring and debugging.
+-   **Request Body**: None
+-   **Success Response (200 OK)**:
+    ```json
+    {
+        "total_workers": 10,
+        "busy_workers": 3,
+        "idle_workers_in_pool": 2,
+        "is_initializing": false
+    }
+    ```
+
+## Usage Example (Python)
+
+Below is a complete example of interacting with the service using the `httpx` library.
+
+```python
+import httpx
+import asyncio
+import uuid
+import base64
+import os
+import subprocess
+
+# --- Configuration ---
+GATEWAY_URL = "http://127.0.0.1:3874"
+AUTH_TOKEN = "" # Will be populated below
+
+# Generate a unique user ID for this session
+USER_ID = str(uuid.uuid4())
+
+HEADERS = {}
+
+def get_auth_token():
+    """Fetches the auth token from the container using a docker exec command."""
+    try:
+        token = subprocess.check_output(
+            ["docker", "exec", "code-interpreter_gateway", "cat", "/gateway/auth_token.txt"],
+            text=True
+        ).strip()
+        return token
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("❌ Could not automatically fetch Auth Token. Ensure the service is running via start.sh/start.ps1.")
+        print("   Please run 'docker exec code-interpreter_gateway cat /gateway/auth_token.txt' manually and paste the token into the AUTH_TOKEN variable.")
+        return None
+
+async def execute_code(client: httpx.AsyncClient, session_id: str, code: str):
+    """A helper function to send an execution request and print the results."""
+    print(f"\n--- Executing Code ---\n{code.strip()}")
+    payload = {"user_uuid": session_id, "code": code}
+    
+    try:
+        response = await client.post(f"{GATEWAY_URL}/execute", json=payload, headers=HEADERS, timeout=30.0)
+        response.raise_for_status() # Raises an exception for 4xx/5xx status codes
+        
+        data = response.json()
+        if data.get("result_text"):
+            print(">>> Text Result:\n" + data["result_text"])
+        if data.get("result_base64"):
+            print(">>> Image generated successfully! (Received base64-encoded PNG data)")
+            # Optional: Save the image data to a file
+            img_data = base64.b64decode(data["result_base64"])
+            output_filename = f"output_{session_id[:8]}.png"
+            with open(output_filename, "wb") as f:
+                f.write(img_data)
+            print(f"    Image saved as {output_filename}")
+            
+    except httpx.HTTPStatusError as e:
+        print(f"Execution failed: {e.response.status_code} - {e.response.text}")
+    except httpx.RequestError as e:
+        print(f"Request error: {e}")
+
+async def release_session(client: httpx.AsyncClient, session_id: str):
+    """A helper function to release a session."""
+    print("\n--- Releasing worker instance ---")
+    release_payload = {"user_uuid": session_id}
+    response = await client.post(f"{GATEWAY_URL}/release", json=release_payload, headers=HEADERS)
+    if response.status_code == 200:
+        print("Successfully released:", response.json().get('detail'))
+    else:
+        print("Failed to release:", response.text)
+
+
+async def main():
+    global AUTH_TOKEN, HEADERS
+    AUTH_TOKEN = get_auth_token()
+    if not AUTH_TOKEN:
+        return
+        
+    HEADERS = {"X-Auth-Token": AUTH_TOKEN}
+    print(f"✅ Successfully fetched token: ...{AUTH_TOKEN[-6:]}")
+
+    async with httpx.AsyncClient() as client:
+        # Example 1: Define variables
+        await execute_code(client, USER_ID, "a = 10\nb = 20")
+        
+        # Example 2: Reuse the variables 'a' and 'b' from the previous execution (stateful)
+        await execute_code(client, USER_ID, "result = a * b\nprint(f'The product is {result}')\nresult")
+
+        # Example 3: Generate an image (matplotlib)
+        matplotlib_code = """
+import matplotlib.pyplot as plt
+import numpy as np
+
+x = np.linspace(0, 10, 100)
+y = np.sin(x)
+
+plt.figure(figsize=(5, 3))
+plt.plot(x, y)
+plt.title('Sine Wave')
+plt.grid(True)
+plt.show()
+        """
+        await execute_code(client, USER_ID, matplotlib_code)
+
+        # Example 4: Proactively release the session and its resources
+        await release_session(client, USER_ID)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
+```
+
+## Roadmap
+
+-   [ ] Add file upload/download functionality
+-   [ ] Implement more granular resource limits (CPU, Memory)
+-   [ ] Support for custom Python environments and pre-installed libraries
+- 
 ```
 
 --- 
 
-`README.md`
+`README_zh.md`
 
 ```markdown
-# Code Interpreter - 高性能、可伸缩、高安全性的 Python 代码沙箱
+# Code Interpreter - 有状态、高性能、可伸缩、高安全性的 Python 代码沙箱
 
 本项目是一个通过 API 驱动的 Python 代码执行沙箱。它采用中心化的 **API 网关 (Gateway)** 和动态的 **工作实例池 (Worker Pool)** 架构，为每个用户提供完全隔离的、有状态的 Python 执行会话。
 
@@ -210,6 +398,8 @@ class User(SQLModel, table=True):
     -   **闲置自动回收**: 网关的后台任务会周期性地检查并回收长时间未活动的实例，自动释放资源，并维持池中最小空闲实例数。
     -   **会话主动释放**: 提供了 `/release` 接口，允许用户主动结束会话并立即销毁其实例，释放资源。
 
+![docker_desktop_screenshot.png](images/docker_desktop_screenshot.png)
+
 ## 架构解析
 
 项目主要由两大部分组成：**API 网关 (Gateway)** 和 **工作实例 (Worker)**。
@@ -232,32 +422,65 @@ class User(SQLModel, table=True):
     *   **内核管理器 (`JupyterKernelManager`)**:
         *   FastAPI 服务通过该模块与 Jupyter Kernel 进行交互，通过 WebSocket 发送代码并实时捕获输出、图像或错误。
 
+![high_level_architecture_zh.png](images/high_level_architecture_zh.png)
+
+这张图展示了系统的主要组成部分以及它们之间的关系，包括用户、API 网关和隔离的工作实例池。
+
+![request_flow_sequence_zh.png](images/request_flow_sequence_zh.png)
+
+这张时序图详细描述了当一个新用户首次发起 /execute 请求时，系统内部各组件的交互步骤。  
+
 ## 快速开始
 
 ### 1. 前提条件
 
 -   [Docker](https://www.docker.com/) 和 [Docker Compose](https://docs.docker.com/compose/) 已正确安装并正在运行。
 -   一个可以发送 HTTP 请求的客户端 (如 cURL, Postman, 或者 Python 的 `httpx` 库)。
+-   对于 Linux/macOS 用户，推荐使用 Bash 或 Zsh。
+-   对于 Windows 用户，需要使用 PowerShell。
 
 ### 2. 启动服务
 
-本项目被设计为使用 Docker Compose 进行一键部署。
+本项目提供了封装好的启动脚本，屏蔽了 `docker-compose` 的复杂性。请**不要**直接运行 `docker-compose up`。
 
-1.  **构建并启动服务**
-    在项目根目录下，执行以下命令：
-
+-   **对于 Linux / macOS 用户:**
+    打开终端，在项目根目录运行：
     ```bash
-    docker-compose up --build -d
+    sh start.sh
     ```
 
-    此命令会：
-    -   构建 `gateway` 和 `worker` 的 Docker 镜像。
-    -   创建一个名为 `code-interpreter_workers_isolated_net` 的隔离内部网络。
-    -   启动网关服务，并将其 `3874` 端口映射到宿主机的 `3874` 端口。
-    -   根据网关的配置 (`gateway/config.py`)，自动初始化工作池。
+-   **对于 Windows 用户:**
+    打开 PowerShell，在项目根目录运行：
+    ```powershell
+    .\start.ps1
+    ```
+脚本会自动构建镜像、启动服务，并清理临时容器。服务启动后，网关将在 `http://127.0.0.1:3874` 上监听请求。
 
-2.  **获取认证令牌**
-    服务首次启动时，一个认证令牌会自动在 `gateway/` 目录下生成，文件名为 `auth_token.txt`。你也可以通过设置环境变量 `AUTH_TOKEN` 来自定义令牌。
+### 3. 获取认证令牌
+
+服务首次启动时，一个唯一的认证令牌会自动生成（你也可以从 gateway 容器的 logs 中找到）。你可以通过以下命令从正在运行的网关容器中获取它：
+
+```bash
+docker exec code-interpreter_gateway cat /gateway/auth_token.txt
+```
+请复制这个令牌，并在后续的 API 请求中使用。  
+你可以访问项目目录下的 `test.html` 来测试 API，或者使用下面的 Python 示例代码。
+
+![img.png](images/img_test_page.png)
+
+### 4. 停止服务
+
+当你完成使用后，请使用对应的停止脚本来彻底关闭并清理所有资源，包括动态创建的 worker 容器。
+
+-   **对于 Linux / macOS 用户:**
+    ```bash
+    sh stop.sh
+    ```
+
+-   **对于 Windows 用户:**
+    ```powershell
+    .\stop.ps1
+    ```
 
 ## API 接口文档
 
@@ -267,7 +490,7 @@ class User(SQLModel, table=True):
 
 所有接口都需要在 HTTP 请求头中提供认证令牌。
 -   **Header**: `X-Auth-Token`
--   **Value**: `你的认证令牌`
+-   **Value**: `<你的认证令牌>`
 
 ---
 
@@ -300,7 +523,7 @@ class User(SQLModel, table=True):
 -   **Error Responses**:
     -   `400 Bad Request`: 代码执行出错（例如语法错误）或执行超时。
     -   `401 Unauthorized`: 认证令牌无效或缺失。
-    -   `503 Service Unavailable`: 工作池已满，暂时没有可用的工作实例。
+    -   `503 Service Unavailable`: 工作池已满，或正在初始化，暂时没有可用的工作实例。
 
 ---
 
@@ -355,15 +578,29 @@ import asyncio
 import uuid
 import base64
 import os
+import subprocess
 
 # --- 配置 ---
 GATEWAY_URL = "http://127.0.0.1:3874"
-# 从 gateway/auth_token.txt 文件中获取
-AUTH_TOKEN = "your-actual-auth-token" 
+AUTH_TOKEN = "" # 将在此处填充
+
 # 为这个会话生成一个唯一的用户 ID
 USER_ID = str(uuid.uuid4())
 
-HEADERS = {"X-Auth-Token": AUTH_TOKEN}
+HEADERS = {}
+
+def get_auth_token():
+    """通过 docker exec 命令从容器中获取令牌"""
+    try:
+        token = subprocess.check_output(
+            ["docker", "exec", "code-interpreter_gateway", "cat", "/gateway/auth_token.txt"],
+            text=True
+        ).strip()
+        return token
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("❌ 无法自动获取 Auth Token。请确保服务已通过 start.sh/start.ps1 启动。")
+        print("   请手动运行 'docker exec code-interpreter_gateway cat /gateway/auth_token.txt' 并将令牌粘贴到 AUTH_TOKEN 变量中。")
+        return None
 
 async def execute_code(client: httpx.AsyncClient, session_id: str, code: str):
     """一个辅助函数，用于发送执行请求并打印结果。"""
@@ -371,7 +608,7 @@ async def execute_code(client: httpx.AsyncClient, session_id: str, code: str):
     payload = {"user_uuid": session_id, "code": code}
     
     try:
-        response = await client.post(f"{GATEWAY_URL}/execute", json=payload, headers=HEADERS)
+        response = await client.post(f"{GATEWAY_URL}/execute", json=payload, headers=HEADERS, timeout=30.0)
         response.raise_for_status() # 如果状态码不是 2xx，则抛出异常
         
         data = response.json()
@@ -391,7 +628,6 @@ async def execute_code(client: httpx.AsyncClient, session_id: str, code: str):
     except httpx.RequestError as e:
         print(f"请求错误: {e}")
 
-
 async def release_session(client: httpx.AsyncClient, session_id: str):
     """辅助函数，用于释放会话。"""
     print("\n--- 正在释放工作实例 ---")
@@ -404,7 +640,15 @@ async def release_session(client: httpx.AsyncClient, session_id: str):
 
 
 async def main():
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    global AUTH_TOKEN, HEADERS
+    AUTH_TOKEN = get_auth_token()
+    if not AUTH_TOKEN:
+        return
+        
+    HEADERS = {"X-Auth-Token": AUTH_TOKEN}
+    print(f"✅ 成功获取令牌: ...{AUTH_TOKEN[-6:]}")
+
+    async with httpx.AsyncClient() as client:
         # 示例 1: 定义变量
         await execute_code(client, USER_ID, "a = 10\nb = 20")
         
@@ -432,26 +676,127 @@ plt.show()
 
 
 if __name__ == "__main__":
-    # 替换为你的真实令牌
-    if AUTH_TOKEN == "your-actual-auth-token":
-        # 尝试从文件中读取令牌
-        try:
-            with open(os.path.join("gateway", "auth_token.txt"), "r") as f:
-                AUTH_TOKEN = f.read().strip()
-                HEADERS["X-Auth-Token"] = AUTH_TOKEN
-        except FileNotFoundError:
-             print("错误: 请将 AUTH_TOKEN 变量替换为你的真实令牌，或确保 gateway/auth_token.txt 文件存在。")
-             exit(1)
-             
     asyncio.run(main())
+
 ```
 
 ## Roadmap
 
 -   [ ] 增加文件上传下载功能
--   [ ] 增加 `site-packages` 的持久化存储
 -   [ ] 更精细化的资源限制 (CPU, 内存)
 -   [ ] 支持自定义 Python 环境和预装库
+
+```
+
+--- 
+
+`_test.py`
+
+```python
+import httpx
+import asyncio
+import uuid
+import base64
+import os
+import subprocess
+
+# --- 配置 ---
+GATEWAY_URL = "http://127.0.0.1:3874"
+AUTH_TOKEN = "" # 将在此处填充
+
+# 为这个会话生成一个唯一的用户 ID
+USER_ID = str(uuid.uuid4())
+
+HEADERS = {}
+
+def get_auth_token():
+    """通过 docker exec 命令从容器中获取令牌"""
+    try:
+        token = subprocess.check_output(
+            ["docker", "exec", "code-interpreter_gateway", "cat", "/gateway/auth_token.txt"],
+            text=True
+        ).strip()
+        return token
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("❌ 无法自动获取 Auth Token。请确保服务已通过 start.sh/start.ps1 启动。")
+        print("   请手动运行 'docker exec code-interpreter_gateway cat /gateway/auth_token.txt' 并将令牌粘贴到 AUTH_TOKEN 变量中。")
+        return None
+
+async def execute_code(client: httpx.AsyncClient, session_id: str, code: str):
+    """一个辅助函数，用于发送执行请求并打印结果。"""
+    print(f"\n--- 正在执行代码 ---\n{code.strip()}")
+    payload = {"user_uuid": session_id, "code": code}
+
+    try:
+        response = await client.post(f"{GATEWAY_URL}/execute", json=payload, headers=HEADERS, timeout=30.0)
+        response.raise_for_status() # 如果状态码不是 2xx，则抛出异常
+
+        data = response.json()
+        if data.get("result_text"):
+            print(">>> 文本结果:\n" + data["result_text"])
+        if data.get("result_base64"):
+            print(">>> 成功生成图像！(返回 base64 编码的 PNG 数据)")
+            # 可选：将图像数据保存到文件
+            img_data = base64.b64decode(data["result_base64"])
+            output_filename = f"output_{session_id[:8]}.png"
+            with open(output_filename, "wb") as f:
+                f.write(img_data)
+            print(f"    图像已保存为 {output_filename}")
+
+    except httpx.HTTPStatusError as e:
+        print(f"执行失败: {e.response.status_code} - {e.response.text}")
+    except httpx.RequestError as e:
+        print(f"请求错误: {e}")
+
+async def release_session(client: httpx.AsyncClient, session_id: str):
+    """辅助函数，用于释放会话。"""
+    print("\n--- 正在释放工作实例 ---")
+    release_payload = {"user_uuid": session_id}
+    response = await client.post(f"{GATEWAY_URL}/release", json=release_payload, headers=HEADERS)
+    if response.status_code == 200:
+        print("成功释放:", response.json().get('detail'))
+    else:
+        print("释放失败:", response.text)
+
+
+async def main():
+    global AUTH_TOKEN, HEADERS
+    AUTH_TOKEN = get_auth_token()
+    if not AUTH_TOKEN:
+        return
+
+    HEADERS = {"X-Auth-Token": AUTH_TOKEN}
+    print(f"✅ 成功获取令牌: ...{AUTH_TOKEN[-6:]}")
+
+    async with httpx.AsyncClient() as client:
+        # 示例 1: 定义变量
+        await execute_code(client, USER_ID, "a = 10\nb = 20")
+
+        # 示例 2: 复用上一次执行的变量 'a' 和 'b' (有状态)
+        await execute_code(client, USER_ID, "result = a * b\nprint(f'The product is {result}')\nresult")
+
+        # 示例 3: 生成一个图像 (matplotlib)
+        matplotlib_code = """
+import matplotlib.pyplot as plt
+import numpy as np
+
+x = np.linspace(0, 10, 100)
+y = np.sin(x)
+
+plt.figure(figsize=(5, 3))
+plt.plot(x, y)
+plt.title('Sine Wave')
+plt.grid(True)
+plt.show()
+        """
+        await execute_code(client, USER_ID, matplotlib_code)
+
+        # 示例 4: 主动释放会话和资源
+        await release_session(client, USER_ID)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
 
 ```
 
@@ -589,7 +934,7 @@ WORKER_IMAGE_NAME: str = "code-interpreter-worker:latest" # Docker compose creat
 
 # --- Pool Sizing ---
 # The minimum number of idle workers to keep ready in the pool.
-MIN_IDLE_WORKERS: int = 2
+MIN_IDLE_WORKERS: int = 5
 
 # The absolute maximum number of concurrent workers allowed.
 MAX_TOTAL_WORKERS: int = 30
@@ -887,47 +1232,44 @@ from dto import Worker, WorkerStatus
 
 class WorkerManager:
     """
-    Manages the lifecycle of Docker-based worker containers.
-
-    This class is implemented as a Singleton using only class-level variables
-    and methods. It handles the creation, assignment, and destruction of
-    workers, maintaining a pool of idle workers to handle user requests
-    promptly.
+    Manages the lifecycle of Docker-based worker containers using a sophisticated
+    locking strategy for high concurrency and safety.
     """
     # --- Configuration variables ---
-    # These must be set by calling the `init` method before use.
     WORKER_IMAGE_NAME: str
     INTERNAL_NETWORK_NAME: str
     MIN_IDLE_WORKERS: int
     MAX_TOTAL_WORKERS: int
     WORKER_IDLE_TIMEOUT: int
     RECYCLING_INTERVAL: int
+    MAX_CREATION_RETRIES: int = 3  # 新增：创建重试次数
+    CREATION_RETRY_DELAY: float = 1.0  # 新增：重试延迟
 
-    # --- Internal state ---
+    # --- Internal state and Locking Primitives ---
     docker: Docker = Docker()
-    workers: dict[str, Worker] = {}  # container_id -> Worker
-    user_to_worker_map: dict[str, str] = {}  # user_uuid -> container_id
-    idle_workers: asyncio.Queue[Worker] = asyncio.Queue()
-    _lock: asyncio.Lock = asyncio.Lock()
+    workers: dict[str, Worker] = {}
+    user_to_worker_map: dict[str, str] = {}
+
+    # 改进：使用计数器而不是 Queue，避免线程安全问题
+    _idle_worker_ids: set[str] = set()  # 存储空闲容器 ID
+
+    _state_lock: asyncio.Lock = asyncio.Lock()
+    _creation_semaphore: asyncio.Semaphore | None = None
+
     _is_initializing: bool = True
+    _is_replenishing: bool = False
+    _shutdown_event: asyncio.Event = asyncio.Event()  # 新增：优雅关闭信号
 
     @classmethod
     async def init(
-        cls,
-        worker_image_name: str,
-        internal_network_name: str,
-        min_idle_workers: int,
-        max_total_workers: int,
-        worker_idle_timeout: int,
-        recycling_interval: int,
+            cls,
+            worker_image_name: str,
+            internal_network_name: str,
+            min_idle_workers: int,
+            max_total_workers: int,
+            worker_idle_timeout: int,
+            recycling_interval: int,
     ) -> None:
-        """
-        Injects configuration and initializes the worker pool.
-
-        Cleans up any stale worker containers from previous runs and
-        pre-warms the pool by creating a minimum number of idle workers.
-        """
-        # 1. Configure the manager
         cls.WORKER_IMAGE_NAME = worker_image_name
         cls.INTERNAL_NETWORK_NAME = internal_network_name
         cls.MIN_IDLE_WORKERS = min_idle_workers
@@ -935,52 +1277,110 @@ class WorkerManager:
         cls.WORKER_IDLE_TIMEOUT = worker_idle_timeout
         cls.RECYCLING_INTERVAL = recycling_interval
 
-        # 2. Initialize the pool
+        cls._creation_semaphore = asyncio.Semaphore(cls.MAX_TOTAL_WORKERS)
+        cls._shutdown_event.clear()
+
         l.info("Initializing worker pool...")
         await cls._cleanup_stale_workers()
         await cls._replenish_idle_pool()
         cls._is_initializing = False
-        l.info(f"Worker pool initialized. Idle workers: {cls.idle_workers.qsize()}")
+
+        async with cls._state_lock:
+            idle_count = len(cls._idle_worker_ids)
+        l.info(f"Worker pool initialized. Idle workers: {idle_count}")
 
     @classmethod
     async def close(cls) -> None:
-        """Closes the Docker client connection."""
+        """优雅关闭"""
+        l.info("Shutting down WorkerManager...")
+        cls._shutdown_event.set()
+
+        async with cls._state_lock:
+            all_container_ids = list(cls.workers.keys())
+
+        # 并发删除所有容器
+        destroy_tasks = [
+            cls._destroy_worker(cls.workers[cid])
+            for cid in all_container_ids
+            if cid in cls.workers
+        ]
+        await asyncio.gather(*destroy_tasks, return_exceptions=True)
+
         await cls.docker.close()
+        l.info("WorkerManager shutdown complete.")
 
     @classmethod
     async def _cleanup_stale_workers(cls) -> None:
-        """Finds and removes any dangling worker containers managed by this gateway."""
+        """清理遗留容器，增强错误处理"""
         try:
-            old_workers: list[DockerContainer] = await cls.docker.containers.list(
+            old_workers = await cls.docker.containers.list(
                 filters={"label": [f"managed-by=code-interpreter-gateway"]},
             )
             if not old_workers:
                 return
 
             l.warning(f"Found {len(old_workers)} stale worker containers. Cleaning up...")
-            cleanup_tasks = [container.delete(force=True) for container in old_workers]
-            await asyncio.gather(*cleanup_tasks, return_exceptions=True)
-            l.info("Stale worker cleanup complete.")
+
+            # 并发删除，收集结果
+            cleanup_tasks = [
+                cls._safe_delete_container(container)
+                for container in old_workers
+            ]
+            results = await asyncio.gather(*cleanup_tasks, return_exceptions=True)
+
+            # 统计成功/失败数量
+            success_count = sum(1 for r in results if r is True)
+            failure_count = len(results) - success_count
+
+            l.info(f"Stale worker cleanup: {success_count} succeeded, {failure_count} failed.")
         except DockerError as e:
             l.error(f"Error during stale worker cleanup: {e}")
 
     @classmethod
-    async def _create_new_worker(cls) -> Worker:
-        """
-        Creates, starts, and health-checks a single new worker container.
+    async def _safe_delete_container(cls, container: DockerContainer) -> bool:
+        """安全删除容器并释放信号量"""
+        try:
+            await container.delete(force=True)
+            try:
+                cls._creation_semaphore.release()
+            except ValueError:
+                pass  # 已经释放到最大值
+            return True
+        except DockerError as e:
+            if e.status != 404:  # 404 表示容器已不存在
+                l.error(f"Failed to delete container {container.id[:12]}: {e}")
+            return False
 
-        :return: A healthy Worker object or None if creation fails.
+    @classmethod
+    async def _create_new_worker(cls, retry_count: int = 0) -> Worker:
         """
+        创建新容器，带重试机制
+        """
+        if cls._shutdown_event.is_set():
+            raise RuntimeError("WorkerManager is shutting down")
+
+        l.debug(f"Attempting to acquire creation permit (attempt {retry_count + 1})...")
+        await cls._creation_semaphore.acquire()
+        l.debug("Creation permit acquired.")
+
         container_name = f"code-worker-{uuid.uuid4().hex[:12]}"
+        container = None
+
         try:
             l.info(f"Creating new worker container: {container_name}")
-            container: DockerContainer = await cls.docker.containers.create_or_replace(
+            container = await cls.docker.containers.create_or_replace(
                 config={
                     'Image': cls.WORKER_IMAGE_NAME,
                     'HostConfig': {
                         'NetworkMode': cls.INTERNAL_NETWORK_NAME,
+                        # 新增：资源限制
+                        'Memory': 1024 * 1024 * 1024,  # 512MB
+                        'CpuShares': 1024,
                     },
-                    'Labels': {'managed-by': "code-interpreter-gateway"},
+                    'Labels': {
+                        'managed-by': "code-interpreter-gateway",
+                        'created-at': str(int(time.time())),
+                    },
                 },
                 name=container_name,
             )
@@ -993,195 +1393,258 @@ class WorkerManager:
                 status=WorkerStatus.IDLE,
             )
 
-            is_healthy = await cls._is_worker_healthy(worker)
-            if not is_healthy:
-                l.error(f"Newly created worker {container_name} is unhealthy. Removing.")
-                await cls._destroy_worker(worker)
+            if not await cls._is_worker_healthy(worker):
                 raise RuntimeError("Worker failed health check after creation.")
 
             l.success(f"Worker {container_name} created and healthy.")
             return worker
-        except DockerError as e:
-            msg = f"Failed to create container {container_name}: {e}"
-            l.error(msg)
-            raise RuntimeError(msg)
 
-    @classmethod
-    async def _is_worker_healthy(cls, worker: Worker, timeout: int = 30) -> bool:
-        """
-        Performs a health check on a worker by polling its /health endpoint.
+        except Exception as e:
+            l.error(f"Failed to create worker {container_name}: {e}")
 
-        :param worker: The worker to check.
-        :param timeout: The maximum time in seconds to wait for the worker to become healthy.
-        :return: True if the worker is healthy, False otherwise.
-        """
-        start_time = time.time()
-        async with httpx.AsyncClient() as client:
-            while time.time() - start_time < timeout:
+            # 清理失败的容器
+            if container:
                 try:
-                    response = await client.get(f"{worker.internal_url}/health", timeout=2.0)
-                    if response.status_code == 200:
-                        return True
-                except httpx.RequestError:
-                    await asyncio.sleep(0.1)
-            return False
+                    await container.delete(force=True)
+                except Exception as cleanup_error:
+                    l.error(f"Failed to cleanup failed container: {cleanup_error}")
+
+            # 释放信号量
+            cls._creation_semaphore.release()
+            l.debug("Creation permit released due to error.")
+
+            # 重试逻辑
+            if retry_count < cls.MAX_CREATION_RETRIES:
+                l.warning(f"Retrying worker creation ({retry_count + 1}/{cls.MAX_CREATION_RETRIES})...")
+                await asyncio.sleep(cls.CREATION_RETRY_DELAY * (retry_count + 1))
+                return await cls._create_new_worker(retry_count + 1)
+            else:
+                raise RuntimeError(f"Failed to create worker after {cls.MAX_CREATION_RETRIES} retries") from e
 
     @classmethod
     async def _destroy_worker(cls, worker: Worker) -> None:
-        """
-        Stops and removes a worker's Docker container and cleans up internal state.
-
-        :param worker: The worker to destroy.
-        """
+        """销毁容器，增强错误处理"""
         l.warning(f"Destroying worker: {worker.container_name}")
         try:
-            container: DockerContainer = cls.docker.containers.container(worker.container_id)
+            container = cls.docker.containers.container(worker.container_id)
             await container.delete(force=True)
+            l.info(f"Worker {worker.container_name} destroyed successfully.")
         except DockerError as e:
-            if e.status == 404:
-                l.warning(f"Worker {worker.container_name} not found.")
-            else:
-                msg = f"Error deleting container {worker.container_name}: {e}"
-                l.error(msg)
-                raise RuntimeError(msg)
+            if e.status != 404:
+                l.error(f"Error deleting container {worker.container_name}: {e}")
         finally:
-            # Clean up internal state
-            cls.workers.pop(worker.container_id, None)
-            if worker.user_uuid and worker.user_uuid in cls.user_to_worker_map:
-                cls.user_to_worker_map.pop(worker.user_uuid, None)
+            cls._creation_semaphore.release()
+            l.debug(f"Creation permit released for destroyed worker {worker.container_name}")
 
     @classmethod
     async def get_worker_for_user(cls, user_uuid: str) -> Worker:
         """
-        Gets a worker for a given user.
-
-        Retrieves an existing worker, an idle worker from the pool, or creates
-        a new one.
-
-        :param user_uuid: The UUID of the user requesting a worker.
-        :return: An available Worker instance.
-        :raises HTTPException: If the pool is initializing or no worker is available.
+        为用户获取容器，改进版本
         """
-        async with cls._lock:
+        if cls._shutdown_event.is_set():
+            raise HTTPException(status_code=503, detail="Service is shutting down")
+
+        # 触发后台补充（非阻塞）
+        cls._trigger_background_replenishment()
+
+        async with cls._state_lock:
             if cls._is_initializing:
                 raise HTTPException(
                     status_code=503,
-                    detail="Worker pool is initializing. Please try again shortly.",
+                    detail="Worker pool is initializing. Please try again shortly."
                 )
 
-            # Case 1: User already has an active worker
+            # 1. 检查用户是否已有容器
             if user_uuid in cls.user_to_worker_map:
-                container_id = cls.user_to_worker_map[user_uuid]
-                worker = cls.workers[container_id]
+                worker = cls.workers[cls.user_to_worker_map[user_uuid]]
                 worker.last_active_timestamp = time.time()
-                l.info(f"Found existing worker {worker.container_name} for user {user_uuid}")
+                l.info(f"Reusing existing worker {worker.container_name} for user {user_uuid}")
                 return worker
 
-            # Case 2: Get an idle worker from the pool
-            if not cls.idle_workers.empty():
-                worker = await cls.idle_workers.get()
+            # 2. 尝试从空闲池获取
+            if cls._idle_worker_ids:
+                worker_id = cls._idle_worker_ids.pop()
+                worker = cls.workers[worker_id]
                 cls._bind_worker_to_user(worker, user_uuid)
                 l.info(f"Assigned idle worker {worker.container_name} to user {user_uuid}")
                 return worker
 
-            # Case 3: Create a new worker if under the configured maximum limit
-            if len(cls.workers) < cls.MAX_TOTAL_WORKERS:
-                l.info("No idle workers available. Attempting to create a new one.")
-                worker = await cls._create_new_worker()
-                if worker:
-                    cls.workers[worker.container_id] = worker
-                    cls._bind_worker_to_user(worker, user_uuid)
-                    l.info(
-                        f"Assigned newly created worker {worker.container_name} to user {user_uuid}"
-                    )
-                    return worker
+        # 3. 池子为空，同步创建新容器（在锁外）
+        l.info("No idle workers available. Creating a new one synchronously.")
+        try:
+            worker = await cls._create_new_worker()
+            async with cls._state_lock:
+                cls.workers[worker.container_id] = worker
+                cls._bind_worker_to_user(worker, user_uuid)
+            l.info(f"Assigned newly created worker {worker.container_name} to user {user_uuid}")
+            return worker
+        except Exception as e:
+            l.error(f"Failed to create worker for user request: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail=f"Could not create a new worker: {str(e)}"
+            )
 
-            # Case 4: Max limit reached, no workers available
-            raise HTTPException(status_code=503, detail="No available workers. Please try again later.")
+    @classmethod
+    async def release_worker_by_user(cls, user_uuid: str) -> None:
+        """
+        释放用户的容器
+        """
+        worker_to_destroy = None
+        async with cls._state_lock:
+            if user_uuid in cls.user_to_worker_map:
+                container_id = cls.user_to_worker_map.pop(user_uuid)
+                worker_to_destroy = cls.workers.pop(container_id, None)
+                # 从空闲集合中移除（如果存在）
+                cls._idle_worker_ids.discard(container_id)
+
+        if worker_to_destroy:
+            l.info(f"Releasing worker {worker_to_destroy.container_name} from user {user_uuid}")
+            await cls._destroy_worker(worker_to_destroy)
+            cls._trigger_background_replenishment()
+        else:
+            l.warning(f"No worker found for user {user_uuid} during release")
+
+    @classmethod
+    def _trigger_background_replenishment(cls):
+        """触发后台补充，非阻塞"""
+        if not cls._shutdown_event.is_set():
+            asyncio.create_task(cls._replenish_idle_pool())
+
+    @classmethod
+    async def _replenish_idle_pool(cls) -> None:
+        """
+        补充空闲池，改进版本
+        """
+        if cls._shutdown_event.is_set():
+            return
+
+        async with cls._state_lock:
+            if cls._is_replenishing:
+                return
+
+            needed_count = cls.MIN_IDLE_WORKERS - len(cls._idle_worker_ids)
+            if needed_count <= 0:
+                return
+
+            l.info(f"Replenishing idle pool. Need to add {needed_count} worker(s).")
+            cls._is_replenishing = True
+
+        # 在锁外并发创建
+        tasks = [cls._create_new_worker() for _ in range(needed_count)]
+        new_workers = await asyncio.gather(*tasks, return_exceptions=True)
+
+        async with cls._state_lock:
+            successful_creations = 0
+            for worker in new_workers:
+                if isinstance(worker, Worker):
+                    cls.workers[worker.container_id] = worker
+                    cls._idle_worker_ids.add(worker.container_id)
+                    successful_creations += 1
+                elif isinstance(worker, Exception):
+                    l.error(f"Failed to create worker during replenishment: {worker}")
+
+            if successful_creations > 0:
+                l.info(f"Successfully added {successful_creations}/{needed_count} worker(s) to idle pool.")
+            else:
+                l.error("Failed to add any workers to idle pool!")
+
+            cls._is_replenishing = False
 
     @classmethod
     def _bind_worker_to_user(cls, worker: Worker, user_uuid: str) -> None:
-        """
-        Assigns a worker to a user and updates its state.
-
-        :param worker: The worker to be assigned.
-        :param user_uuid: The user's UUID.
-        """
+        """绑定容器到用户"""
         worker.status = WorkerStatus.BUSY
         worker.user_uuid = user_uuid
         worker.last_active_timestamp = time.time()
         cls.user_to_worker_map[user_uuid] = worker.container_id
 
     @classmethod
-    async def release_worker_by_user(cls, user_uuid: str) -> None:
+    async def _is_worker_healthy(cls, worker: Worker, timeout: int = 30) -> bool:
         """
-        Releases a worker previously assigned to a user.
-
-        This method destroys the worker container and triggers pool replenishment.
-
-        :param user_uuid: The UUID of the user releasing the worker.
+        健康检查，改进版本
         """
-        async with cls._lock:
-            if user_uuid not in cls.user_to_worker_map:
-                return
+        start_time = time.time()
+        retry_interval = 0.5  # 增加重试间隔，减少请求频率
 
-            container_id = cls.user_to_worker_map.pop(user_uuid)
-            worker = cls.workers.pop(container_id)
-            l.info(f"User {user_uuid} released worker {worker.container_name}. Destroying...")
-            await cls._destroy_worker(worker)
-            await cls._replenish_idle_pool()
+        async with httpx.AsyncClient() as client:
+            while time.time() - start_time < timeout:
+                if cls._shutdown_event.is_set():
+                    return False
 
-    @classmethod
-    async def _replenish_idle_pool(cls) -> None:
-        """
-        Creates new workers to meet the minimum idle worker requirement.
+                try:
+                    response = await client.get(
+                        f"{worker.internal_url}/health",
+                        timeout=2.0
+                    )
+                    if response.status_code == 200:
+                        l.debug(f"Worker {worker.container_name} passed health check")
+                        return True
+                except httpx.RequestError as e:
+                    l.debug(f"Health check failed for {worker.container_name}: {e}")
 
-        This function should always be called within a lock to ensure thread safety.
-        """
-        needed_count = cls.MIN_IDLE_WORKERS - cls.idle_workers.qsize()
-        available_slots = cls.MAX_TOTAL_WORKERS - len(cls.workers)
+                await asyncio.sleep(retry_interval)
 
-        creation_count = min(needed_count, available_slots)
-        if creation_count <= 0:
-            return
-
-        l.info(f"Replenishing idle pool. Need to create {creation_count} worker(s).")
-        tasks = [cls._create_new_worker() for _ in range(creation_count)]
-        new_workers = await asyncio.gather(*tasks)
-
-        for worker in new_workers:
-            if worker:
-                cls.workers[worker.container_id] = worker
-                await cls.idle_workers.put(worker)
+            l.error(f"Worker {worker.container_name} failed health check after {timeout}s")
+            return False
 
     @classmethod
     async def recycle_timed_out_workers(cls) -> None:
         """
-        Periodically checks for and recycles workers that have been idle for too long.
-
-        This method is designed to be run as a continuous background task.
+        回收超时容器，后台任务
         """
-        while True:
-            await asyncio.sleep(cls.RECYCLING_INTERVAL)
-            async with cls._lock:
-                l.info("Running background task to recycle timed-out workers...")
-                now = time.time()
-                timed_out_users: list[str] = []
-                for user_uuid, container_id in cls.user_to_worker_map.items():
-                    worker = cls.workers.get(container_id)
-                    if worker and (now - worker.last_active_timestamp > cls.WORKER_IDLE_TIMEOUT):
-                        timed_out_users.append(user_uuid)
+        while not cls._shutdown_event.is_set():
+            try:
+                await asyncio.sleep(cls.RECYCLING_INTERVAL)
 
-                if timed_out_users:
-                    l.warning(f"Found {len(timed_out_users)} timed-out workers to recycle.")
-                    for user_uuid in timed_out_users:
-                        container_id = cls.user_to_worker_map.pop(user_uuid)
-                        worker = cls.workers.pop(container_id)
-                        await cls._destroy_worker(worker)
+                workers_to_destroy = []
+                async with cls._state_lock:
+                    l.info("Running background task to recycle timed-out workers...")
+                    now = time.time()
 
-                    await cls._replenish_idle_pool()
+                    for user_uuid, container_id in list(cls.user_to_worker_map.items()):
+                        worker = cls.workers.get(container_id)
+                        if worker and (now - worker.last_active_timestamp > cls.WORKER_IDLE_TIMEOUT):
+                            l.warning(
+                                f"Worker {worker.container_name} for user {user_uuid} "
+                                f"timed out (idle for {now - worker.last_active_timestamp:.1f}s)."
+                            )
+                            cls.user_to_worker_map.pop(user_uuid)
+                            worker_to_destroy = cls.workers.pop(container_id)
+                            cls._idle_worker_ids.discard(container_id)
+                            workers_to_destroy.append(worker_to_destroy)
+
+                # 在锁外删除容器
+                if workers_to_destroy:
+                    l.info(f"Destroying {len(workers_to_destroy)} timed-out worker(s)...")
+                    destroy_tasks = [
+                        cls._destroy_worker(worker)
+                        for worker in workers_to_destroy
+                    ]
+                    await asyncio.gather(*destroy_tasks, return_exceptions=True)
+                    cls._trigger_background_replenishment()
                 else:
                     l.info("No timed-out workers found.")
+
+            except Exception as e:
+                l.error(f"Error in recycle_timed_out_workers: {e}")
+                # 继续运行，不要因为单次错误而停止
+
+    @classmethod
+    async def get_pool_stats(cls) -> dict:
+        """
+        获取池子统计信息（用于监控）
+        """
+        async with cls._state_lock:
+            return {
+                "total_workers": len(cls.workers),
+                "idle_workers": len(cls._idle_worker_ids),
+                "busy_workers": len(cls.user_to_worker_map),
+                "is_replenishing": cls._is_replenishing,
+                "is_initializing": cls._is_initializing,
+                "available_capacity": cls._creation_semaphore._value,
+            }
+
 
 ```
 
@@ -1194,6 +1657,23 @@ class WorkerManager:
 
 # 设置脚本在遇到错误时立即停止
 $ErrorActionPreference = "Stop"
+
+# --- 新增检查 ---
+$containerName = "code-interpreter_gateway"
+Write-Host "🔎 Checking status of container '$containerName'..."
+
+# 检查网关容器是否已经在运行。docker ps -q 的输出在 PowerShell 中是字符串
+# 如果容器存在，变量 $gatewayId 将包含容器ID（非空字符串），if 会判断为 true
+$gatewayId = docker ps -q --filter "name=^${containerName}$"
+
+if ($gatewayId) {
+    Write-Host "✅ The Code Interpreter gateway is already running. No action taken." -ForegroundColor Green
+    exit 0
+} else {
+    Write-Host "   -> Container is not running. Proceeding with startup."
+}
+# --- 检查结束 ---
+
 
 Write-Host "🚀 [Step 1/2] Starting the Code Interpreter environment..." -ForegroundColor Green
 # 使用 --build 确保镜像总是最新的
@@ -1626,6 +2106,396 @@ Write-Host "✅ Shutdown and cleanup complete." -ForegroundColor Green
 </script>
 </body>
 </html>
+
+```
+
+--- 
+
+`test_concurrent.py`
+
+```python
+import asyncio
+import random
+import time
+import uuid
+import subprocess
+from collections import Counter, defaultdict
+import statistics
+import json
+import math
+import os
+
+import httpx
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# --- ⚙️ 测试配置 ---
+
+# 网关地址
+GATEWAY_URL = "http://127.0.0.1:3874"
+# 并发用户数 (同时模拟多少个用户)
+NUM_CONCURRENT_USERS = 30
+# 每个用户的请求总数 (必须大于等于3，以完整执行一个场景)
+REQUESTS_PER_USER = 100
+# 两次请求之间的思考时间 (秒)，模拟真实用户行为
+THINK_TIME_RANGE = (0.1, 0.5)
+# 请求超时设置 (秒)
+REQUEST_TIMEOUT = 45.0
+
+
+# --- 🎨 终端颜色辅助函数 ---
+def green(text): return f"\033[92m{text}\033[0m"
+def red(text): return f"\033[91m{text}\033[0m"
+def yellow(text): return f"\033[93m{text}\033[0m"
+def blue(text): return f"\033[94m{text}\033[0m"
+def dim(text): return f"\033[2m{text}\033[0m"
+
+# --- 令牌获取 ---
+AUTH_TOKEN = ""
+HEADERS = {}
+
+def get_auth_token():
+    """通过 docker exec 命令从容器中获取令牌"""
+    try:
+        token = subprocess.check_output(
+            ["docker", "exec", "code-interpreter_gateway", "cat", "/gateway/auth_token.txt"],
+            text=True
+        ).strip()
+        return token
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print(red("❌ 无法自动获取 Auth Token。请确保服务已通过 start.sh/start.ps1 启动。"))
+        return None
+
+# --- 核心模拟逻辑 ---
+
+def generate_code_for_step(scenario_type: str, step: int, state: dict):
+    """
+    根据给定的场景、步骤和当前状态，生成代码、预期答案和下一个状态。
+    """
+    if scenario_type == 'simple_arithmetic':
+        if step == 0:
+            base_val = random.randint(1_000, 9_999)
+            state['x'] = base_val
+            code = f"x = {base_val}"
+            return code, None, state # 第一步不打印，无预期输出
+        else:
+            add_val = random.randint(100, 999)
+            expected_answer = state['x'] + add_val
+            state['x'] = expected_answer
+            code = f"x += {add_val}; print(x)"
+            return code, expected_answer, state
+
+    elif scenario_type == 'list_manipulation':
+        if step == 0:
+            rand_len = random.randint(2, 4)
+            base_list = random.sample(range(10, 100), rand_len)
+            state['my_list'] = base_list
+            code = f"my_list = {base_list}"
+            return code, None, state
+        else:
+            new_element = random.randint(100, 199)
+            state['my_list'].append(new_element)
+            expected_answer = sum(state['my_list'])
+            code = f"my_list.append({new_element}); print(sum(my_list))"
+            return code, expected_answer, state
+
+    elif scenario_type == 'numpy_array':
+        # 确保每个 numpy 场景至少能执行3步
+        step = step % 3
+        if step == 0:
+            state['np_arr'] = [random.randint(10, 50) for _ in range(3)]
+            code = f"import numpy as np; arr = np.array({state['np_arr']})"
+            return code, None, state
+        elif step == 1:
+            multiplier = random.randint(2, 5)
+            state['np_arr'] = [x * multiplier for x in state['np_arr']]
+            expected_answer = sum(state['np_arr'])
+            code = f"arr = arr * {multiplier}; print(np.sum(arr))"
+            return code, expected_answer, state
+        elif step == 2:
+            expected_answer = sum(state['np_arr']) / len(state['np_arr'])
+            code = f"print(np.mean(arr))"
+            # 状态不变，只是读取
+            return code, expected_answer, state
+
+    # 默认回退到简单算术
+    return generate_code_for_step('simple_arithmetic', step, state)
+
+
+async def simulate_user_session(client: httpx.AsyncClient, results: list):
+    """
+    模拟一个用户的完整会话：随机选择一个场景，执行一系列有状态的计算，
+    验证每一步的结果，以确认会话的隔离性，最后确保释放会话。
+    """
+    user_id = str(uuid.uuid4())
+    session_state = {}
+    # 为此用户随机分配一个场景
+    scenario = random.choice(['simple_arithmetic', 'list_manipulation', 'numpy_array'])
+
+    try:
+        for i in range(REQUESTS_PER_USER):
+            code, expected_answer, session_state = generate_code_for_step(scenario, i, session_state)
+            payload = {"user_uuid": user_id, "code": code}
+
+            start_time = time.monotonic()
+            error_detail = None
+            verification_passed = None
+
+            try:
+                response = await client.post(
+                    f"{GATEWAY_URL}/execute", json=payload, headers=HEADERS, timeout=REQUEST_TIMEOUT
+                )
+                latency = time.monotonic() - start_time
+
+                if response.status_code == 200:
+                    # 如果预期答案为 None (例如初始化步骤)，则直接视为验证成功
+                    if expected_answer is None:
+                        verification_passed = True
+                    else:
+                        try:
+                            response_data = response.json()
+                            output = response_data.get("result_text", "").strip()
+
+                            if not output:
+                                verification_passed = False
+                                error_detail = "执行成功但 result_text 为空"
+                            else:
+                                actual_result = float(output) # 统一转为 float 以兼容整数和浮点数
+                                # 对浮点数使用容错比较
+                                if math.isclose(actual_result, float(expected_answer), rel_tol=1e-9):
+                                    verification_passed = True
+                                else:
+                                    verification_passed = False
+                                    error_detail = f"结果不匹配! 场景:{scenario}, 预期:{expected_answer}, 实际:{actual_result}"
+                        except (json.JSONDecodeError, ValueError, KeyError) as e:
+                            verification_passed = False
+                            error_detail = f"无法解析或验证响应: {e} | 响应体: {response.text[:150]}"
+                else:
+                    try:
+                        error_detail = response.json().get('detail', response.text)
+                    except Exception:
+                        error_detail = response.text
+
+                results.append((response.status_code, latency, error_detail, verification_passed))
+
+            except httpx.RequestError as e:
+                latency = time.monotonic() - start_time
+                error_detail = f"{type(e).__name__}: {e}"
+                results.append((None, latency, error_detail, False))
+
+            await asyncio.sleep(random.uniform(*THINK_TIME_RANGE))
+
+    finally:
+        try:
+            await client.post(
+                f"{GATEWAY_URL}/release", json={"user_uuid": user_id}, headers=HEADERS, timeout=10.0
+            )
+        except httpx.RequestError:
+            pass
+
+def print_results(results: list, total_duration: float):
+    """
+    计算并打印详细的测试结果报告，包括错误内容样本和结果验证统计。
+    """
+    print("\n" + "="*60)
+    print(blue("📊 并发压力测试结果分析"))
+    print("="*60)
+
+    total_requests = len(results)
+    if total_requests == 0:
+        print(red("没有收到任何结果。"))
+        return
+
+    successes = [res for res in results if res[0] == 200]
+    failures = [res for res in results if res[0] != 200]
+
+    verified_success = [res for res in successes if res[3] is True]
+    verified_failed = [res for res in successes if res[3] is False]
+
+
+    success_rate = (len(successes) / total_requests) * 100
+    failure_rate = (len(failures) / total_requests) * 100
+    rps = total_requests / total_duration
+
+    print(f"总计时间:         {total_duration:.2f} s")
+    print(f"并发用户数:       {NUM_CONCURRENT_USERS}")
+    print(f"总请求数:         {total_requests}")
+    print(f"吞吐量 (RPS):     {yellow(f'{rps:.2f} req/s')}")
+    print(f"请求成功率:       {green(f'{success_rate:.2f}%')} ({len(successes)} requests)")
+    print(f"请求失败率:       {red(f'{failure_rate:.2f}%')} ({len(failures)} requests)")
+
+    if successes:
+        verification_success_rate = (len(verified_success) / len(successes)) * 100
+        verification_failure_rate = (len(verified_failed) / len(successes)) * 100
+        print(f"  - 结果验证成功率: {green(f'{verification_success_rate:.2f}%')} ({len(verified_success)} of successes)")
+        print(f"  - 结果验证失败率: {red(f'{verification_failure_rate:.2f}%')} ({len(verified_failed)} of successes)")
+
+
+    if failures:
+        print("\n" + "-"*23 + " 请求失败原因分析 " + "-"*24)
+        errors_by_status = defaultdict(list)
+        for status, _, detail, _ in failures:
+            key = status or "Network Error"
+            errors_by_status[key].append(detail)
+        for status, details in errors_by_status.items():
+            print(f"  - {red(status)}: {len(details)} 次")
+            unique_details = Counter(d for d in details if d).most_common(3)
+            for detail, count in unique_details:
+                detail_preview = (detail[:100] + '...') if len(detail) > 100 else detail
+                print(dim(f"    样本 (x{count}): {detail_preview.strip()}"))
+        print("-" * 60)
+
+    if verified_failed:
+        print("\n" + "-"*23 + " 结果验证失败原因分析 " + "-"*22)
+        verification_errors = [res[2] for res in verified_failed]
+        unique_errors = Counter(e for e in verification_errors if e).most_common(5)
+        for error, count in unique_errors:
+            error_preview = (error[:100] + '...') if len(error) > 100 else error
+            print(dim(f"  - 样本 (x{count}): {error_preview.strip()}"))
+        print("-" * 60)
+
+
+    if verified_success: # 只统计验证成功的请求延迟，更准确
+        latencies = [s[1] for s in verified_success]
+        avg_latency = statistics.mean(latencies)
+        median_latency = statistics.median(latencies)
+        min_latency = min(latencies)
+        max_latency = max(latencies)
+        p95 = sorted(latencies)[int(len(latencies) * 0.95)] if len(latencies) > 20 else max_latency
+
+        print("\n--- 成功且验证通过请求的延迟 (Latency) ---")
+        print(f"平均值:           {avg_latency * 1000:.2f} ms")
+        print(f"中位数 (P50):     {median_latency * 1000:.2f} ms")
+        print(f"P95:              {p95 * 1000:.2f} ms")
+        print(f"最小值:           {min_latency * 1000:.2f} ms")
+        print(f"最大值:           {max_latency * 1000:.2f} ms")
+
+    print("="*60)
+
+# --- ✨ 新增图表生成函数 ✨ ---
+
+def generate_charts(results: list, total_duration: float):
+    """
+    使用 Matplotlib 和 Pandas 生成并保存结果图表。
+    """
+    print(blue("\n🎨 正在生成测试结果图表..."))
+
+    # --- 字体设置，确保中文和负号正常显示 ---
+    try:
+        plt.rcParams['font.sans-serif'] = ['SimHei'] # 'SimHei' 是常用的黑体
+        plt.rcParams['axes.unicode_minus'] = False
+    except:
+        print(yellow("⚠️ 未找到中文字体 'SimHei'，图表中的中文可能显示为方框。"))
+        print(yellow("   请尝试安装 'SimHei' 字体或在代码中替换为其他已安装的中文字体。"))
+
+
+    df = pd.DataFrame(results, columns=['status_code', 'latency', 'error_detail', 'verification_passed'])
+
+    # --- 1. 测试结果概览 (饼图) ---
+    request_failures = len(df[df['status_code'] != 200])
+    verification_failures = len(df[(df['status_code'] == 200) & (df['verification_passed'] == False)])
+    success_verified = len(df[(df['status_code'] == 200) & (df['verification_passed'] == True)])
+
+    labels = ['Success & Verified\n成功且验证通过', 'Verification Failed\n成功但验证失败', 'Request Failed\n请求失败']
+    sizes = [success_verified, verification_failures, request_failures]
+    colors = ['#4CAF50', '#FFC107', '#F44336']
+    explode = (0, 0.1, 0.1)
+
+    fig1, ax1 = plt.subplots(figsize=(10, 7))
+    ax1.pie(sizes, explode=explode, labels=labels, colors=colors, autopct='%1.1f%%',
+            shadow=True, startangle=90, textprops={'fontsize': 12})
+    ax1.axis('equal')
+    plt.title(f'并发测试结果概览 (总请求: {len(df)})\nOverall Test Results (Total Requests: {len(df)})', fontsize=16)
+    plt.savefig("images/1_test_summary_pie_chart.png")
+    plt.close(fig1)
+
+    # --- 2. 请求延迟分布 (直方图 + 箱线图) ---
+    success_latencies = df[df['verification_passed'] == True]['latency'] * 1000 # 转换为毫秒
+
+    if not success_latencies.empty:
+        fig2, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+
+        # 直方图
+        ax1.hist(success_latencies, bins=30, color='skyblue', edgecolor='black')
+        ax1.set_title('请求延迟直方图\nLatency Histogram', fontsize=14)
+        ax1.set_xlabel('延迟 (毫秒) / Latency (ms)', fontsize=12)
+        ax1.set_ylabel('请求数 / Frequency', fontsize=12)
+        ax1.grid(axis='y', alpha=0.75)
+
+        # 箱线图
+        ax2.boxplot(success_latencies, vert=False, patch_artist=True, boxprops=dict(facecolor='lightblue'))
+        ax2.set_title('请求延迟箱线图\nLatency Boxplot', fontsize=14)
+        ax2.set_xlabel('延迟 (毫秒) / Latency (ms)', fontsize=12)
+        ax2.set_yticklabels(['']) # 隐藏 Y 轴标签
+        ax2.grid(axis='x', alpha=0.75)
+
+        plt.suptitle('成功请求的延迟分布\nLatency Distribution for Successful Requests', fontsize=18, y=1.02)
+        plt.tight_layout()
+        plt.savefig("images/2_latency_distribution_chart.png")
+        plt.close(fig2)
+
+    # --- 3. 失败原因分析 (水平条形图) ---
+    df['failure_reason'] = ''
+    # 标记请求失败
+    df.loc[df['status_code'] != 200, 'failure_reason'] = '请求失败 (HTTP ' + df['status_code'].fillna('N/A').astype(str) + ')'
+    # 标记验证失败
+    df.loc[(df['status_code'] == 200) & (df['verification_passed'] == False), 'failure_reason'] = df['error_detail']
+
+    failure_counts = df[df['failure_reason'] != '']['failure_reason'].value_counts().nlargest(10)
+
+    if not failure_counts.empty:
+        fig3, ax = plt.subplots(figsize=(12, 8))
+        failure_counts.sort_values().plot(kind='barh', ax=ax, color='salmon')
+        ax.set_title('Top 10 失败原因分析\nTop 10 Failure Reason Analysis', fontsize=16)
+        ax.set_xlabel('发生次数 / Count', fontsize=12)
+        plt.tight_layout()
+        plt.savefig("images/3_failure_analysis_bar_chart.png")
+        plt.close(fig3)
+
+    print(green("✅ 图表已成功生成并保存到当前目录。"))
+
+
+async def main():
+    global AUTH_TOKEN, HEADERS
+    AUTH_TOKEN = get_auth_token()
+    if not AUTH_TOKEN:
+        return
+
+    HEADERS = {"X-Auth-Token": AUTH_TOKEN}
+
+    print("="*60)
+    print(f"🚀 开始并发压力测试 (多场景 + 状态隔离验证)...")
+    print(f"   配置: {yellow(NUM_CONCURRENT_USERS)} 个并发用户, 每个用户 {yellow(REQUESTS_PER_USER)} 次请求")
+    print("="*60)
+
+    results = []
+    test_start_time = time.monotonic()
+
+    try:
+        limits = httpx.Limits(max_connections=NUM_CONCURRENT_USERS + 10, max_keepalive_connections=20)
+        async with httpx.AsyncClient(limits=limits) as client:
+            tasks = [
+                simulate_user_session(client, results)
+                for _ in range(NUM_CONCURRENT_USERS)
+            ]
+            await asyncio.gather(*tasks)
+    except httpx.ConnectError as e:
+        print(red(f"\n❌ 连接错误: 无法连接到 {GATEWAY_URL}。请确保服务正在运行。"))
+        print(f"   错误详情: {e}")
+        return
+
+    test_end_time = time.monotonic()
+    total_duration = test_end_time - test_start_time
+    print(f"\n✅ 测试完成，耗时 {total_duration:.2f} 秒。正在分析结果...")
+
+    print_results(results, total_duration)
+
+    # --- 调用图表生成函数 ---
+    if results:
+        generate_charts(results, total_duration)
+
+if __name__ == "__main__":
+    asyncio.run(main())
 
 ```
 

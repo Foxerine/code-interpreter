@@ -3,6 +3,23 @@
 # 设置脚本在遇到错误时立即停止
 $ErrorActionPreference = "Stop"
 
+# --- 新增检查 ---
+$containerName = "code-interpreter_gateway"
+Write-Host "🔎 Checking status of container '$containerName'..."
+
+# 检查网关容器是否已经在运行。docker ps -q 的输出在 PowerShell 中是字符串
+# 如果容器存在，变量 $gatewayId 将包含容器ID（非空字符串），if 会判断为 true
+$gatewayId = docker ps -q --filter "name=^${containerName}$"
+
+if ($gatewayId) {
+    Write-Host "✅ The Code Interpreter gateway is already running. No action taken." -ForegroundColor Green
+    exit 0
+} else {
+    Write-Host "   -> Container is not running. Proceeding with startup."
+}
+# --- 检查结束 ---
+
+
 Write-Host "🚀 [Step 1/2] Starting the Code Interpreter environment..." -ForegroundColor Green
 # 使用 --build 确保镜像总是最新的
 # 使用 -d 在后台运行
