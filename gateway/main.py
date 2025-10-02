@@ -92,7 +92,7 @@ async def execute(request: ExecuteRequest) -> ExecuteResponse:
                 await WorkerManager.release_worker_by_user(request.user_uuid)
                 raise HTTPException(
                     status_code=response.status_code,
-                    detail="The code resulted in an execution timeout. The environment has been reset, please try again."
+                    detail="The code resulted in an execution timeout or a crashed environment. The environment has been reset, please try again."
                 )
 
             if response.status_code != 200:
@@ -102,7 +102,7 @@ async def execute(request: ExecuteRequest) -> ExecuteResponse:
     except httpx.RequestError as e:
         l.error(f"Failed to proxy request to worker {worker.container_name}: {e}")
         await WorkerManager.release_worker_by_user(request.user_uuid)
-        raise HTTPException(status_code=504, detail="Gateway Timeout: Could not connect to the execution worker.")
+        raise HTTPException(status_code=504, detail="Gateway Timeout: Could not connect to the execution worker. The environment has been reset, please try again.")
     except HTTPException as he:
         raise
     except Exception as e:

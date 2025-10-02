@@ -158,11 +158,14 @@ class WorkerManager:
                     'Env': [
                         f"GATEWAY_INTERNAL_IP={cls.GATEWAY_INTERNAL_IP}"
                     ],
+                    # todo 这里的内容通过config来指定
+
                     'HostConfig': {
                         'NetworkMode': cls.INTERNAL_NETWORK_NAME,
-                        # 新增：资源限制
-                        'Memory': 1024 * 1024 * 1024,  # 512MB
-                        'CpuShares': 1024,
+                        'Memory': 1024 * 1024 * 1024,  # 1024MB
+                        'MemorySwap': 1024 * 1024 * 1024,
+                        'NanoCpus': 1_000_000_000,
+                        'PidsLimit': 1024,
                         'Links': ['code-interpreter_gateway:gateway'],
                         'CapAdd': ['NET_ADMIN', 'NET_RAW']
                     },
@@ -433,4 +436,5 @@ class WorkerManager:
                 "is_initializing": cls._is_initializing,
                 "available_capacity": cls._creation_semaphore._value,
             }
+
 

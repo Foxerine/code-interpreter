@@ -28,6 +28,6 @@ class HealthStatus(BaseModel):
 
 class ExecutionResult(BaseModel):
     """代码执行结果的 DTO"""
-    status: Literal["ok", "error", "timeout"]
+    status: Literal["ok", "error", "timeout", 'kernel_error']
     type: Literal["text", "image_png_base64", "connection_error", "execution_error", "timeout_error", "processing_error"]
     value: str | None = None

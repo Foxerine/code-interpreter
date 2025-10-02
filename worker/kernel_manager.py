@@ -19,6 +19,10 @@ from websockets.protocol import OPEN
 from dto import ExecutionResult
 
 
+class KernelDeadError(Exception):
+    pass
+
+
 class JupyterKernelManager:
     """A static manager for a persistent Jupyter Kernel."""
     # --- Constants ---
@@ -237,6 +241,9 @@ class JupyterKernelManager:
 
                 msg_type = msg["msg_type"]
                 content = msg.get("content", {})
+
+                if content.get('execution_state') == 'dead':
+                    return ExecutionResult(status='kernel_error', type='processing_error', value='kernel dead')
 
                 if msg_type == 'stream':
                     result_text_parts.append(content.get('text', ''))

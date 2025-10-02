@@ -62,6 +62,13 @@ async def execute_python_code(request: ExecuteRequest) -> ExecuteResponse:
             detail=f"Code execution timed out. This worker instance is now considered unhealthy and should be killed. ",
         )
 
+    elif result.status == 'kernel_error':
+        l.error("FATAL: Kernel dead. This worker instance is now considered unhealthy.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Code execution environment dead. This worker instance is now considered unhealthy and should be killed. ",
+        )
+
     else:  # status == "error"
         l.warning(f"Python execution failed. Type: {result.type}, Message: {result.value}")
         raise HTTPException(
