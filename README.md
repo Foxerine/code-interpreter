@@ -1,5 +1,7 @@
 # Code Interpreter API: A Stateful, Secure, and High-Performance Python Sandbox
 
+[中文版](README_zh.md)
+
 This project provides a robust, API-driven Python code execution sandbox, engineered for high security, stateful session management, and strong performance. It utilizes a centralized **API Gateway** and a dynamic **Worker Pool** architecture, providing each user with a completely isolated and persistent Python session.
 
 A key technical feature of this project is its successful implementation of a **"Virtual-Disk-per-Worker"** architecture. This advanced model dynamically creates, formats, and mounts a dedicated virtual disk (`.img` file via `losetup`) for each worker container at runtime. This approach addresses the significant challenge of reliably managing dynamic block devices in a concurrent containerized environment, enabling superior I/O and filesystem isolation that is fundamental to the system's security posture.
