@@ -14,7 +14,7 @@ Each worker is sandboxed within a multi-layered security model that includes str
 | **🔒 Security** | A multi-layered, zero-trust security model: no internet access (`internal: true`), inter-worker firewalls (`iptables`), gateway inaccessibility, and privilege drop (`root` to `sandbox`). | Basic containerization often allows outbound internet access, lacks inter-worker firewalls (risk of lateral movement), and may run code with excessive privileges. |
 | **🔄 Statefulness** | True session persistence. Each user is mapped to a dedicated worker with a persistent Jupyter Kernel, maintaining the full execution context across all API calls. | Stateless (each call is a new environment) or emulated statefulness (e.g., saving/loading state via serialization), which is often slow and incomplete. |
 | **🛠️ Reliability** | A "Cattle, not Pets" fault tolerance model. The gateway enforces hard timeouts and monitors worker health. Any failed, hung, or crashed worker is instantly destroyed and replaced. | Workers are often treated as stateful "pets" that require complex recovery logic, increasing the risk of contaminated or inconsistent states persisting. |
-| **💡 I/O Isolation** | **Virtual-Disk-per-Worker Architecture**. Each worker gets its own dynamically mounted block device, providing true filesystem and I/O isolation from the host and other workers. | Often relies on shared host volumes (risk of cross-talk and security breaches) or has no persistent, isolated storage at all. |
+| **💡 I/O Isolation**| **Virtual-Disk-per-Worker Architecture**. Each worker gets its own dynamically mounted block device, providing true filesystem and I/O isolation from the host and other workers. | Often relies on shared host volumes (risk of cross-talk and security breaches) or has no persistent, isolated storage at all. |
 
 ## Performance Benchmarks
 
@@ -28,6 +28,12 @@ Stress-tested on a mid-range desktop to validate its performance and scalability
 -   **Request Success Rate**: **100%**
 -   **State Verification Success Rate**: **100%**
 -   **P95 Latency**: **496.50 ms**
+-   **Test Parameters**: The benchmark was conducted with the following runtime configuration:
+    -   `MinIdleWorkers`: 5
+    -   `MaxTotalWorkers`: 30
+    -   `WorkerCPU`: 1.0 core
+    -   `WorkerRAM_MB`: 1024 MB
+    -   `WorkerDisk_MB`: 500 MB
 
 ### Result Charts
 
@@ -49,12 +55,36 @@ Stress-tested on a mid-range desktop to validate its performance and scalability
 
 ### 2. Start the Service
 
-Convenience scripts are provided. **Do not** run `docker-compose up` directly.
+Convenience scripts are provided to start the environment. You can customize the resource allocation and pool size via command-line arguments.
 
--   **Linux / macOS:** `sh start.sh`
--   **Windows (PowerShell):** `.\start.ps1`
+-   **Linux / macOS:** `sh start.sh [options]`
+-   **Windows (PowerShell):** `.\start.ps1 [options]`
 
 The gateway will listen on `http://127.0.0.1:3874`.
+
+#### Customizing the Environment
+
+You can pass the following parameters to the startup scripts to configure the system's behavior.
+
+| Parameter | Shell (`.sh`) | PowerShell (`.ps1`) | Default | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| Min Idle Workers | `--min-idle-workers` | `-MinIdleWorkers` | `5` | The minimum number of idle, pre-warmed workers to keep ready in the pool. |
+| Max Total Workers| `--max-total-workers`| `-MaxTotalWorkers` | `50` | The absolute maximum number of concurrent worker containers the system is allowed to create. |
+| Worker CPU Limit | `--worker-cpu` | `-WorkerCPU` | `1.0` | The number of CPU cores to allocate to each worker container (e.g., `1.5` for one and a half cores). |
+| Worker RAM Limit | `--worker-ram-mb` | `-WorkerRAM_MB` | `1024` | The amount of RAM in megabytes to allocate to each worker container. |
+| Worker Disk Size | `--worker-disk-mb` | `-WorkerDisk_MB` | `500` | The size of the virtual disk in megabytes to create for each worker's sandboxed filesystem. |
+
+**Example (Linux/macOS):**
+```bash
+# Start with a larger pool and more powerful workers
+sh start.sh --min-idle-workers 10 --worker-cpu 2.0 --worker-ram-mb 2048
+```
+
+**Example (Windows PowerShell):**
+```powershell
+# Start with a lightweight configuration for a low-resource environment
+.\start.ps1 -MinIdleWorkers 2 -MaxTotalWorkers 10 -WorkerCPU 0.5 -WorkerRAM_MB 512
+```
 
 ### 3. Get the Auth Token
 
@@ -138,3 +168,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+```

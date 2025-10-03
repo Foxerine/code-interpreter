@@ -31,6 +31,12 @@ services:
       - INTERNAL_NETWORK_NAME=code-interpreter_workers_isolated_net
       - GATEWAY_EXTERNAL_IP=172.29.0.100
       - GATEWAY_INTERNAL_IP=172.28.0.2
+      # --- [新增] 从宿主机环境读取配置 ---
+      - MIN_IDLE_WORKERS=${MIN_IDLE_WORKERS}
+      - MAX_TOTAL_WORKERS=${MAX_TOTAL_WORKERS}
+      - WORKER_CPU=${WORKER_CPU}
+      - WORKER_RAM_MB=${WORKER_RAM_MB}
+      - WORKER_MAX_DISK_SIZE_MB=${WORKER_MAX_DISK_SIZE_MB}
     depends_on:
       - worker # 确保 worker 镜像被构建
 

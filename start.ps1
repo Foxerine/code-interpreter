@@ -1,6 +1,24 @@
-# start.ps1 - Ultimate Environment Setup Wizard & Starter (v14.0 - Final, Named Volumes)
+# start.ps1 - Ultimate Environment Setup Wizard & Starter (v15.0 - Configurable)
 
-# --- Self-elevation to Administrator ---
+[CmdletBinding()]
+param(
+# 最小空闲工作实例数
+    [int]$MinIdleWorkers = 15,
+
+# 允许创建的最大工作实例总数
+    [int]$MaxTotalWorkers = 50,
+
+# 每个工作实例的CPU核心数限制 (例如: 1.0, 1.5, 2.0)
+    [double]$WorkerCPU = 1.0,
+
+# 每个工作实例的内存限制 (单位: MB)
+    [int]$WorkerRAM_MB = 1024,
+
+# 每个工作实例的虚拟磁盘大小 (单位: MB)
+    [int]$WorkerDisk_MB = 500
+)
+
+# --- 自我提升为管理员权限 ---
 $currentUser = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 $isAdmin = $currentUser.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
@@ -12,11 +30,27 @@ if (-not $isAdmin) {
 $ErrorActionPreference = "Stop"
 
 # ==============================================================================
-# PHASE 1: AUTOMATED ENVIRONMENT VALIDATION
+# 将脚本参数设置为环境变量，以便 Docker Compose 可以使用它们
+# ==============================================================================
+$env:MIN_IDLE_WORKERS = $MinIdleWorkers
+$env:MAX_TOTAL_WORKERS = $MaxTotalWorkers
+$env:WORKER_CPU = $WorkerCPU
+$env:WORKER_RAM_MB = $WorkerRAM_MB
+$env:WORKER_MAX_DISK_SIZE_MB = $WorkerDisk_MB
+
+Write-Host "`n⚙️  Applying Configuration:" -ForegroundColor Cyan
+Write-Host "   - Min Idle Workers      : $env:MIN_IDLE_WORKERS"
+Write-Host "   - Max Total Workers     : $env:MAX_TOTAL_WORKERS"
+Write-Host "   - Worker CPU Limit      : $env:WORKER_CPU cores"
+Write-Host "   - Worker RAM Limit      : $env:WORKER_RAM_MB MB"
+Write-Host "   - Worker Disk Size      : $env:WORKER_MAX_DISK_SIZE_MB MB"
+
+
+# ==============================================================================
+# PHASE 1: 验证环境
 # ==============================================================================
 Write-Host "`n🔎 [Phase 1/3] Validating Your Environment..." -ForegroundColor Cyan
 
-# This function remains the same as it correctly checks for WSL and Docker Desktop.
 function Test-Docker-Environment {
     try { wsl.exe --status >$null 2>$null; if ($LASTEXITCODE -ne 0) { throw "WSL is not installed." } } catch { return "WslNotInstalled" }
     docker version >$null 2>$null
@@ -29,7 +63,7 @@ function Test-Docker-Environment {
 
 while ($true) {
     $envStatus = Test-Docker-Environment
-    if ($envStatus -eq "OK") { Write-Host "   -> ✅ Environment is ready!" -ForegroundColor Green; break }
+    if ($envStatus -eq "OK") { Write-Host "   -> ✅ Environment is ready!"; break }
     Write-Host "`n⚠️  ACTION REQUIRED:" -ForegroundColor Yellow
     switch ($envStatus) {
         "WslNotInstalled" { Write-Host "   Please enable WSL: Open Admin PowerShell, run 'wsl --install', then REBOOT." }
@@ -40,14 +74,13 @@ while ($true) {
 }
 
 # ==============================================================================
-# PHASE 2: STARTING THE APPLICATION
+# PHASE 2: 启动应用
 # ==============================================================================
 Write-Host "`n🚀 [Phase 2/3] Starting application via Docker Compose..." -ForegroundColor Cyan
 
 try {
     $containerName = "code-interpreter_gateway"
     $token = ""
-
     $gatewayId = docker ps -q --filter "name=^$containerName$"
 
     if (-not [string]::IsNullOrWhiteSpace($gatewayId)) {
@@ -69,9 +102,7 @@ try {
             try {
                 $tokenOutput = docker exec $containerName cat /gateway/auth_token.txt 2>$null
                 if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($tokenOutput)) {
-                    $token = $tokenOutput.Trim()
-                    Write-Host "" # Newline
-                    break
+                    $token = $tokenOutput.Trim(); Write-Host ""; break
                 }
             } catch {}
             Write-Host -n "."; Start-Sleep -Seconds 1; $i++
@@ -94,6 +125,6 @@ catch {
 }
 
 # ==============================================================================
-# PHASE 3: FINALIZATION
+# PHASE 3: 完成
 # ==============================================================================
 Write-Host "`n✅ [Phase 3/3] The application has been started successfully." -ForegroundColor Green

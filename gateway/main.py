@@ -17,9 +17,9 @@ from worker_manager import WorkerManager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Configure and initialize the WorkerManager
     l.info(f"token: {config.AUTH_TOKEN}")
 
+    # [更新] 传递所有可配置的参数
     await WorkerManager.init(
         worker_image_name=config.WORKER_IMAGE_NAME,
         internal_network_name=config.INTERNAL_NETWORK_NAME,
@@ -29,12 +29,12 @@ async def lifespan(app: FastAPI):
         recycling_interval=config.RECYCLING_INTERVAL,
         gateway_internal_ip=config.GATEWAY_INTERNAL_IP,
         worker_max_disk_size_mb=config.WORKER_MAX_DISK_SIZE_MB,
+        worker_cpu=config.WORKER_CPU,
+        worker_ram_mb=config.WORKER_RAM_MB,
     )
 
-    # Start the background task
     recycling_task = asyncio.create_task(WorkerManager.recycle_timed_out_workers())
     yield
-    # Cleanup on shutdown
     recycling_task.cancel()
     l.info("Shutting down. Cleaning up all worker containers...")
     await WorkerManager.close()

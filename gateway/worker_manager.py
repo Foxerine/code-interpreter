@@ -33,6 +33,9 @@ class WorkerManager:
     RECYCLING_INTERVAL: int
     GATEWAY_INTERNAL_IP: str
     WORKER_MAX_DISK_SIZE_MB: int
+    WORKER_MAX_DISK_SIZE_MB: int
+    WORKER_CPU: float
+    WORKER_RAM_MB: int
 
     # --- Constants ---
     MAX_CREATION_RETRIES: int = 3
@@ -81,6 +84,8 @@ class WorkerManager:
             recycling_interval: int,
             gateway_internal_ip: str,
             worker_max_disk_size_mb: int,
+            worker_cpu: float,
+            worker_ram_mb: int,
     ) -> None:
         """Initializes the WorkerManager, populating configuration and pre-warming the pool."""
         cls.WORKER_IMAGE_NAME = worker_image_name
@@ -91,6 +96,9 @@ class WorkerManager:
         cls.RECYCLING_INTERVAL = recycling_interval
         cls.GATEWAY_INTERNAL_IP = gateway_internal_ip
         cls.WORKER_MAX_DISK_SIZE_MB = worker_max_disk_size_mb
+
+        cls.WORKER_CPU = worker_cpu
+        cls.WORKER_RAM_MB = worker_ram_mb
 
         cls._creation_semaphore = asyncio.Semaphore(cls.MAX_TOTAL_WORKERS)
         cls._shutdown_event.clear()
@@ -204,8 +212,9 @@ class WorkerManager:
                 'HostConfig': {
                     'ReadonlyRootfs': True,
                     'NetworkMode': cls.INTERNAL_NETWORK_NAME,
-                    'Memory': 1024 * 1024 * 1024,
-                    'NanoCpus': 1_000_000_000,
+                    # [更新] 应用来自配置的 CPU 和 RAM 限制
+                    'Memory': cls.WORKER_RAM_MB * 1024 * 1024,
+                    'NanoCpus': int(cls.WORKER_CPU * 1_000_000_000),
                     'CapAdd': ['SYS_ADMIN', 'NET_ADMIN', 'NET_RAW'],
                     'SecurityOpt': ["apparmor:unconfined"],
                     'Devices': device_mapping,

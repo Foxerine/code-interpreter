@@ -21,8 +21,6 @@ GATEWAY_URL = "http://127.0.0.1:3874"
 NUM_CONCURRENT_USERS = 25
 # 每个用户的请求总数 (必须大于等于3，以完整执行一个场景)
 REQUESTS_PER_USER = 100
-# 两次请求之间的思考时间 (秒)，模拟真实用户行为
-THINK_TIME_RANGE = (0.1, 0.5)
 # 请求超时设置 (秒)
 REQUEST_TIMEOUT = 45.0
 
@@ -167,7 +165,6 @@ async def simulate_user_session(client: httpx.AsyncClient, results: list):
                 error_detail = f"{type(e).__name__}: {e}"
                 results.append((None, latency, error_detail, False))
 
-            await asyncio.sleep(random.uniform(*THINK_TIME_RANGE))
 
     finally:
         try:
