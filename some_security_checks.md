@@ -29,7 +29,8 @@ my_variable = result # Update the state for the next test
 ```
 **Expected Output**: `✅ Calculation successful. Result: 500`
 
-#### **Test 1.2: Library & Plotting Test**```python
+#### **Test 1.2: Library & Plotting Test**
+```python
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -234,7 +235,8 @@ if all_secure:
     print("\nConclusion: DNS resolution is properly blocked.")
 else:
     print("\nConclusion: DNS resolution is possible, which is a major security leak.")
-```**Expected Output**: `✅ SECURE: Failed to resolve ...` for all domains. Docker's embedded DNS server, when serving a network marked as `internal`, should refuse to resolve external names.
+```
+**Expected Output**: `✅ SECURE: Failed to resolve ...` for all domains. Docker's embedded DNS server, when serving a network marked as `internal`, should refuse to resolve external names.
 
 ---
 

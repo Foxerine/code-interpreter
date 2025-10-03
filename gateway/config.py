@@ -36,12 +36,14 @@ INTERNAL_NETWORK_NAME: str = os.environ.get("INTERNAL_NETWORK_NAME", "code-inter
 # This should match the image built for the worker service.
 WORKER_IMAGE_NAME: str = "code-interpreter-worker:latest" # Docker compose creates this image name
 
+WORKER_MAX_DISK_SIZE_MB: int = 500  # 500 MB
+
 # --- Pool Sizing ---
 # The minimum number of idle workers to keep ready in the pool.
 MIN_IDLE_WORKERS: int = 5
 
 # The absolute maximum number of concurrent workers allowed.
-MAX_TOTAL_WORKERS: int = 30
+MAX_TOTAL_WORKERS: int = int(os.environ.get("MAX_TOTAL_WORKERS", 50))
 
 # --- Timeout ---
 # Time in seconds a worker can be idle (not executing code) before being recycled.

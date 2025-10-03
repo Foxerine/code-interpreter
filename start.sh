@@ -1,74 +1,60 @@
-#!/bin/bash
+#!/bin/sh
 
-# Set the script to exit immediately if any command fails
+# 在遇到任何错误时立即退出
 set -e
 
-# --- Color Definitions ---
-GREEN='\033[0;32m'
-CYAN='\033[0;36m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
-
-# --- Check if already running ---
+# --- Step 1: 检查网关容器是否已在运行 ---
 CONTAINER_NAME="code-interpreter_gateway"
-echo -e "🔎 Checking status of container '${CONTAINER_NAME}'..."
+echo "🔎 Checking status of container '$CONTAINER_NAME'..."
+GATEWAY_ID=$(docker ps -q --filter "name=^${CONTAINER_NAME}$")
 
-# docker ps -q returns the container ID if it's running
-if [ -n "$(docker ps -q --filter "name=^${CONTAINER_NAME}$")" ]; then
-    echo -e "${GREEN}✅ The Code Interpreter gateway is already running. No action taken.${NC}"
-    # --- MODIFICATION: Fetch and display the token even if it's already running ---
-    echo -e "\n🔑 Retrieving existing Auth Token..."
-    TOKEN=$(docker exec ${CONTAINER_NAME} cat /gateway/auth_token.txt)
-    echo -e "Your Auth Token is: ${YELLOW}${TOKEN}${NC}"
+if [ -n "$GATEWAY_ID" ]; then
+    echo "✅ The Code Interpreter gateway is already running."
+    echo ""
+    echo "🔑 Retrieving existing Auth Token..."
+    TOKEN=$(docker exec "$CONTAINER_NAME" cat /gateway/auth_token.txt)
+    echo "   Your Auth Token is: $TOKEN"
     exit 0
-else
-    echo -e "   -> Container is not running. Proceeding with startup."
 fi
+echo "   -> Container is not running. Proceeding with startup."
 
-# --- Step 1: Start Docker Compose ---
-echo -e "\n🚀 ${GREEN}[Step 1/3] Starting the Code Interpreter environment...${NC}"
-# Use --build to ensure images are up-to-date
-# Use -d to run in the background
+# --- Step 2: 启动 Docker Compose ---
+echo ""
+echo "🚀 Starting the Code Interpreter environment..."
 docker-compose up --build -d
 
-# --- Step 2: Clean up builder container ---
-echo -e "\n🧹 ${CYAN}[Step 2/3] Cleaning up the temporary builder container...${NC}"
-
-# Find the builder container ID
+# --- Step 3: 清理临时的 builder 容器 ---
 BUILDER_ID=$(docker ps -a -q --filter "name=code-interpreter_worker_builder")
-
 if [ -n "$BUILDER_ID" ]; then
-    echo "   -> Found builder container. Removing it..."
+    echo ""
+    echo "🧹 Cleaning up the temporary builder container..."
     docker rm "$BUILDER_ID" > /dev/null
-    echo -e "   -> ${GREEN}Builder container successfully removed.${NC}"
-else
-    echo -e "   -> ${YELLOW}No temporary builder container found to clean up. Skipping.${NC}"
+    echo "   -> Builder container successfully removed."
 fi
 
-# --- Step 3: Wait for and retrieve the Auth Token ---
-echo -e "\n🔑 ${CYAN}[Step 3/3] Waiting for Gateway to generate the Auth Token...${NC}"
+# --- Step 4: 等待并获取 Auth Token ---
+echo ""
+echo "🔑 Waiting for Gateway to generate the Auth Token..."
 
-TOKEN=""
-# Poll for 30 seconds (1-second intervals) for the token file to be created
-for i in {1..30}; do
-    # Try to get the token, suppress "No such file or directory" errors
-    TOKEN=$(docker exec ${CONTAINER_NAME} cat /gateway/auth_token.txt 2>/dev/null || true)
+i=1
+while [ $i -le 30 ]; do
+    TOKEN=$(docker exec "$CONTAINER_NAME" cat /gateway/auth_token.txt 2>/dev/null || true)
     if [ -n "$TOKEN" ]; then
-        break
+        echo ""
+        echo "✅ Token successfully retrieved!"
+        echo ""
+        echo "🎉 Startup complete. The system is ready."
+        echo "   Your Auth Token is: $TOKEN"
+        exit 0
     fi
-    echo -n "."
+    printf "."
     sleep 1
+    i=$((i + 1))
 done
 
-echo "" # Newline after the dots
-
-if [ -z "$TOKEN" ]; then
-    echo -e "\n${RED}❌ Timed out waiting for the Auth Token.${NC}"
-    echo -e "   Please check the gateway container logs with: ${YELLOW}docker logs ${CONTAINER_NAME}${NC}"
-    exit 1
-fi
-
-echo -e "${GREEN}✅ Token successfully retrieved!${NC}"
-echo -e "\n🎉 ${GREEN}Startup complete. The system is ready.${NC}"
-echo -e "Your Auth Token is: ${YELLOW}${TOKEN}${NC}"
+# 如果循环结束仍未获取到 Token
+echo ""
+echo "❌ Timed out waiting for the Auth Token." >&2
+echo "   Showing last 50 lines of gateway logs for debugging:" >&2
+docker-compose logs --tail=50 code-interpreter_gateway
+exit 1

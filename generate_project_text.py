@@ -10,7 +10,7 @@ ROOT_DIR = '.'
 OUTPUT_FILE = 'project_text.md'
 
 # 要包含内容的文件扩展名
-INCLUDE_EXTENSIONS = ('.py', '.md', '.ps1', '.html', '.yml', '.txt')
+INCLUDE_EXTENSIONS = ('.py', '.md', '.ps1', '.html', '.yml', '.txt', '.sh', '.conf')
 
 # 要包含内容的确切文件名 (不区分大小写)
 INCLUDE_FILENAMES = ('dockerfile',)

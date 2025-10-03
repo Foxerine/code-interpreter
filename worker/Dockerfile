@@ -14,8 +14,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends supervisor tini fontconfig libgl1-mesa-glx libglib2.0-0 curl iptables && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-RUN useradd --create-home --shell /bin/bash sandbox && \
-    mkdir /sandbox && \
+RUN useradd --create-home -d /sandbox --shell /bin/bash sandbox && \
     chown -R sandbox:sandbox /sandbox
 
 # Install font

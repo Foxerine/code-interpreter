@@ -27,7 +27,8 @@ async def lifespan(app: FastAPI):
         max_total_workers=config.MAX_TOTAL_WORKERS,
         worker_idle_timeout=config.WORKER_IDLE_TIMEOUT,
         recycling_interval=config.RECYCLING_INTERVAL,
-        gateway_internal_ip=config.GATEWAY_INTERNAL_IP
+        gateway_internal_ip=config.GATEWAY_INTERNAL_IP,
+        worker_max_disk_size_mb=config.WORKER_MAX_DISK_SIZE_MB,
     )
 
     # Start the background task
@@ -92,7 +93,9 @@ async def execute(request: ExecuteRequest) -> ExecuteResponse:
                 await WorkerManager.release_worker_by_user(request.user_uuid)
                 raise HTTPException(
                     status_code=response.status_code,
-                    detail="The code resulted in an execution timeout or a crashed environment. The environment has been reset, please try again."
+                    detail="The code resulted in an execution timeout or a crashed environment or resource exhaustion. "
+                           "The environment has been reset, "
+                           "please try again."
                 )
 
             if response.status_code != 200:

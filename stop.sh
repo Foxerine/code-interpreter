@@ -1,34 +1,34 @@
-#!/bin/bash
+#!/bin/sh
 
-# 这个脚本用于彻底关闭并清理 Code Interpreter 环境。
-# 我们不使用 'set -e'，因为清理脚本应该尝试执行所有步骤，即使其中一步失败。
+# 在遇到任何错误时立即退出
+set -e
 
-echo "🛑 Initiating shutdown sequence for the Code Interpreter environment..."
+echo "🛑 Initiating shutdown sequence..."
 
-echo "🤚 [Step 1/3] Stopping gateway to prevent new workers from being created..."
-# 第一次 down 会停止并移除 gateway。
-# 如果 worker 还在运行，网络可能无法被移除，这没关系，后续步骤会处理。
-# --remove-orphans 可以清理掉任何不属于 compose 文件但属于项目历史的容器。
-docker-compose down --remove-orphans > /dev/null 2>&1
-echo "   -> Gateway stopped."
+# Step 1: 停止并移除 docker-compose 服务
+# 使用 'down -v' 会移除 compose 文件中定义的命名卷 (gateway_data, virtual_disks)
+# 如果希望保留这些数据，请使用 'down'
+echo ""
+echo "🤚 [Step 1/3] Stopping docker-compose services..."
+docker-compose down
 
-echo "🔥 [Step 2/3] Finding and forcibly removing all dynamically created worker containers..."
-# 通过标签查找所有由 WorkerManager 创建的容器
+# Step 2: 查找并强制移除所有动态创建的 worker 容器
+echo ""
+echo "🔥 [Step 2/3] Finding and forcibly removing all dynamic workers..."
 WORKER_IDS=$(docker ps -a -q --filter "label=managed-by=code-interpreter-gateway")
-
-if [[ -n "$WORKER_IDS" ]]; then
-    echo "   -> Found dynamically created workers. Removing them now..."
-    # 使用 xargs 可以安全地处理多个容器ID（即使它们之间有换行符）
-    # 使用 -f 强制删除正在运行的容器
-    echo "$WORKER_IDS" | xargs docker rm -f > /dev/null
+if [ -n "$WORKER_IDS" ]; then
+    # 在一行上静默移除所有 worker
+    docker rm -f $WORKER_IDS > /dev/null
     echo "   -> All dynamic workers have been removed."
 else
-    echo "   -> No dynamically created workers found to clean up."
+    echo "   -> No dynamically created workers found."
 fi
 
-echo "🧹 [Step 3/3] Final cleanup of network and other resources..."
-# 既然所有 worker 都已经被移除，这次 down 将能够成功清理掉网络和 builder 容器
-docker-compose down --remove-orphans > /dev/null 2>&1
-echo "   -> Network and remaining resources have been cleaned up."
+# Step 3: 清理 Docker 网络
+# docker-compose down 通常会处理，但这是一个额外的保险
+echo ""
+echo "🌐 [Step 3/3] Pruning unused networks..."
+docker network prune -f --filter "label=com.docker.compose.project"
 
+echo ""
 echo "✅ Shutdown and cleanup complete."

@@ -1,5 +1,10 @@
 FROM python:3.12-slim-bookworm
 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends e2fsprogs util-linux && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 LABEL maintainer="Foxerine"
 LABEL description="Gateway and manager for the Python code interpreter."
 

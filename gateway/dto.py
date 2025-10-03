@@ -16,6 +16,7 @@ class Worker(BaseModel):
     status: WorkerStatus = WorkerStatus.CREATING
     user_uuid: str | None = None
     last_active_timestamp: float = Field(default_factory=time.time)
+    loop_device: str # [NEW] Store the associated loop device path (e.g., /dev/loop10)
 
 class ExecuteRequest(BaseModel):
     user_uuid: str

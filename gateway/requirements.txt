@@ -4,3 +4,4 @@ loguru
 httpx
 pydantic
 aiodocker
+aiofiles

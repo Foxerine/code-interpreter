@@ -15,6 +15,10 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       # 挂载一个卷用于持久化 auth_token
       - gateway_data:/gateway
+      # Allows Gateway to create .img files inside Docker-managed volumes
+      - virtual_disks:/virtual_disks
+      - /dev:/dev
+    privileged: true
     networks:
       # [新增] 连接到外部网络（默认桥接），以便 Gateway 自身可以访问互联网
       code-interpreter-gateway-external-net:
@@ -63,3 +67,4 @@ networks:
 
 volumes:
   gateway_data:
+  virtual_disks:

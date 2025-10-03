@@ -1,73 +1,99 @@
-# start.ps1
+# start.ps1 - Ultimate Environment Setup Wizard & Starter (v14.0 - Final, Named Volumes)
 
-# Set the script to exit immediately if any command fails
+# --- Self-elevation to Administrator ---
+$currentUser = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+$isAdmin = $currentUser.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {
+    Write-Host "This script needs Administrator privileges to manage Docker." -ForegroundColor Yellow
+    Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoExit", "-File", "`"$PSCommandPath`""
+    exit
+}
+
 $ErrorActionPreference = "Stop"
 
-# --- Check if already running ---
-$containerName = "code-interpreter_gateway"
-Write-Host "🔎 Checking status of container '$containerName'..."
+# ==============================================================================
+# PHASE 1: AUTOMATED ENVIRONMENT VALIDATION
+# ==============================================================================
+Write-Host "`n🔎 [Phase 1/3] Validating Your Environment..." -ForegroundColor Cyan
 
-$gatewayId = docker ps -q --filter "name=^${containerName}$"
-
-if ($gatewayId) {
-    Write-Host "✅ The Code Interpreter gateway is already running. No action taken." -ForegroundColor Green
-    Write-Host "`n🔑 Retrieving existing Auth Token..." -ForegroundColor Cyan
-    $token = docker exec $containerName cat /gateway/auth_token.txt
-    Write-Host "Your Auth Token is: $token" -BackgroundColor Green -ForegroundColor Black
-    exit 0
-} else {
-    Write-Host "   -> Container is not running. Proceeding with startup."
-}
-
-# --- Step 1: Start Docker Compose ---
-Write-Host "`n🚀 [Step 1/3] Starting the Code Interpreter environment..." -ForegroundColor Green
-docker-compose up --build -d
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ docker-compose up failed. Please check the logs." -ForegroundColor Red
-    exit 1
-}
-
-# --- Step 2: Clean up builder container ---
-Write-Host "`n🧹 [Step 2/3] Cleaning up the temporary builder container..." -ForegroundColor Cyan
-
-$builderId = docker ps -a -q --filter "name=code-interpreter_worker_builder"
-
-if ($builderId) {
-    Write-Host "   -> Found builder container. Removing it..."
-    docker rm $builderId | Out-Null
-    Write-Host "   -> Builder container successfully removed." -ForegroundColor Green
-} else {
-    Write-Host "   -> No temporary builder container found to clean up. Skipping." -ForegroundColor Yellow
-}
-
-# --- Step 3: Wait for and retrieve the Auth Token ---
-Write-Host "`n🔑 [Step 3/3] Waiting for Gateway to generate the Auth Token..." -ForegroundColor Cyan
-
-$token = $null
-# Poll for 30 seconds for the token file to be created
-for ($i = 1; $i -le 30; $i++) {
-    try {
-        $token = docker exec $containerName cat /gateway/auth_token.txt
-        if ($token) {
-            break
-        }
-    } catch {
-        # This block catches the error from the failed docker exec.
-        # We do nothing here, which allows the loop to continue to the next poll.
+# This function remains the same as it correctly checks for WSL and Docker Desktop.
+function Test-Docker-Environment {
+    try { wsl.exe --status >$null 2>$null; if ($LASTEXITCODE -ne 0) { throw "WSL is not installed." } } catch { return "WslNotInstalled" }
+    docker version >$null 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        if (Get-Command docker -ErrorAction SilentlyContinue) { return "DockerNotRunning" }
+        else { return "DockerNotInstalled" }
     }
-    Write-Host -NoNewline "."
-    Start-Sleep -Seconds 1
+    return "OK"
 }
 
-Write-Host "" # Newline after the dots
+while ($true) {
+    $envStatus = Test-Docker-Environment
+    if ($envStatus -eq "OK") { Write-Host "   -> ✅ Environment is ready!" -ForegroundColor Green; break }
+    Write-Host "`n⚠️  ACTION REQUIRED:" -ForegroundColor Yellow
+    switch ($envStatus) {
+        "WslNotInstalled" { Write-Host "   Please enable WSL: Open Admin PowerShell, run 'wsl --install', then REBOOT." }
+        "DockerNotInstalled" { Write-Host "   Please install Docker Desktop from https://www.docker.com" }
+        "DockerNotRunning" { Write-Host "   Please start Docker Desktop and wait for it to initialize." }
+    }
+    Read-Host -Prompt "Press Enter to re-check"
+}
 
-if (-not $token) {
-    Write-Host "`n❌ Timed out waiting for the Auth Token." -ForegroundColor Red
-    Write-Host "   Please check the gateway container logs with: docker logs $containerName" -ForegroundColor Yellow
+# ==============================================================================
+# PHASE 2: STARTING THE APPLICATION
+# ==============================================================================
+Write-Host "`n🚀 [Phase 2/3] Starting application via Docker Compose..." -ForegroundColor Cyan
+
+try {
+    $containerName = "code-interpreter_gateway"
+    $token = ""
+
+    $gatewayId = docker ps -q --filter "name=^$containerName$"
+
+    if (-not [string]::IsNullOrWhiteSpace($gatewayId)) {
+        Write-Host "✅ The gateway is already running."
+        $token = (docker exec $containerName cat /gateway/auth_token.txt).Trim()
+    } else {
+        Write-Host "   -> Container is not running. Building and starting services..."
+        docker-compose up --build -d
+
+        $builderId = docker ps -a -q --filter "name=code-interpreter_worker_builder"
+        if (-not [string]::IsNullOrWhiteSpace($builderId)) {
+            Write-Host "🧹 Cleaning up the temporary builder container..."
+            docker rm $builderId > $null
+        }
+
+        Write-Host -n "🔑 Waiting for Gateway to generate the Auth Token..."
+        $i = 1
+        while ($i -le 30) {
+            try {
+                $tokenOutput = docker exec $containerName cat /gateway/auth_token.txt 2>$null
+                if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($tokenOutput)) {
+                    $token = $tokenOutput.Trim()
+                    Write-Host "" # Newline
+                    break
+                }
+            } catch {}
+            Write-Host -n "."; Start-Sleep -Seconds 1; $i++
+        }
+
+        if ([string]::IsNullOrWhiteSpace($token)) {
+            throw "Timed out waiting for the Auth Token."
+        }
+    }
+
+    Write-Host "`n🎉 Startup complete. The system is ready." -ForegroundColor Green
+    Write-Host "   Your Auth Token is: $token"
+}
+catch {
+    Write-Host "`n❌ An error occurred during startup: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "   Showing last 50 lines of gateway logs:" -ForegroundColor Yellow
+    try { docker-compose logs --tail=50 code-interpreter_gateway } catch {}
+    Read-Host -Prompt "Press Enter to exit"
     exit 1
 }
 
-Write-Host "✅ Token successfully retrieved!" -ForegroundColor Green
-Write-Host "`n🎉 Startup complete. The system is ready." -ForegroundColor Green
-Write-Host "Your Auth Token is: $token" -BackgroundColor Green -ForegroundColor Black
+# ==============================================================================
+# PHASE 3: FINALIZATION
+# ==============================================================================
+Write-Host "`n✅ [Phase 3/3] The application has been started successfully." -ForegroundColor Green

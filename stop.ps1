@@ -1,30 +1,48 @@
-# stop.ps1
+# stop.ps1 - Stops and thoroughly cleans up all related Docker resources
 
-# 设置脚本在遇到错误时继续执行，因为我们预期某些命令可能会“失败”
-$ErrorActionPreference = "SilentlyContinue"
-
-Write-Host "🛑 Initiating shutdown sequence for the Code Interpreter environment..." -ForegroundColor Yellow
-
-Write-Host "🤚 [Step 1/3] Stopping the gateway container to prevent new workers..." -ForegroundColor Cyan
-# 第一次 down 会停止并移除 gateway。网络删除失败是正常的。
-docker-compose down
-Write-Host "   -> Gateway stopped."
-
-Write-Host "🔥 [Step 2/3] Finding and forcibly removing all dynamically created workers..." -ForegroundColor Cyan
-$workerIds = docker ps -a -q --filter "label=managed-by=code-interpreter-gateway"
-
-if ($workerIds) {
-    Write-Host "   -> Found running worker containers. Removing them now..."
-    docker rm -f $workerIds | Out-Null
-    Write-Host "   -> All dynamic workers have been removed." -ForegroundColor Green
-} else {
-    Write-Host "   -> No dynamically created workers found." -ForegroundColor Yellow
+# --- Self-elevation to Administrator ---
+$currentUser = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+$isAdmin = $currentUser.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {
+    Write-Host "This script needs Administrator privileges to manage Docker containers and volumes." -ForegroundColor Yellow
+    # Relaunch the script with Admin rights
+    Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoExit", "-File", "`"$PSCommandPath`""
+    exit
 }
 
-Write-Host "🧹 [Step 3/3] Final cleanup to remove the network..." -ForegroundColor Cyan
-# 因为 worker 已经被清理，这次 down 将成功移除网络
-docker-compose down
-Write-Host "   -> Network and remaining resources cleaned up."
+# Ensure that any command failure will immediately stop the script
+$ErrorActionPreference = "Stop"
 
-Write-Host "✅ Shutdown and cleanup complete." -ForegroundColor Green
+try {
+    Write-Host "`n🛑 Initiating shutdown and cleanup sequence..." -ForegroundColor Cyan
 
+    # Step 1: Stop and remove docker-compose services
+    # The 'down' command stops and removes containers and networks.
+    Write-Host "`n🤚 [Step 1/3] Stopping docker-compose services..." -ForegroundColor White
+    docker-compose down
+
+    # Step 2: Find and forcibly remove all dynamically created worker containers
+    Write-Host "`n🔥 [Step 2/3] Finding and forcibly removing all dynamic workers..." -ForegroundColor White
+    # Use the exact same filter as the .sh script to find gateway-managed containers
+    $workerIds = docker ps -a -q --filter "label=managed-by=code-interpreter-gateway"
+
+    if (-not [string]::IsNullOrWhiteSpace($workerIds)) {
+        # If workers are found, pass them to the docker rm -f command
+        docker rm -f $workerIds
+        Write-Host "   -> ✅ All dynamic workers have been removed." -ForegroundColor Green
+    } else {
+        Write-Host "   -> ℹ️ No dynamically created workers found." -ForegroundColor Gray
+    }
+
+    # Step 3: Prune Docker networks
+    # docker-compose down usually handles this, but this is an extra safety measure for any orphaned networks.
+    Write-Host "`n🌐 [Step 3/3] Pruning unused networks..." -ForegroundColor White
+    docker network prune -f --filter "label=com.docker.compose.project"
+
+    Write-Host "`n🎉 Cleanup complete. All resources have been successfully released." -ForegroundColor Green
+}
+catch {
+    # Catch any errors that occur during execution
+    Write-Host "`n❌ An error occurred during shutdown: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "   Please check the output above for more details." -ForegroundColor Yellow
+}
