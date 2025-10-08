@@ -5,11 +5,13 @@ import httpx
 from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger as l
+from starlette.status import HTTP_204_NO_CONTENT
 
 import config
 from dto import (
-    ExecuteRequest, ExecuteResponse,
-    ReleaseRequest, ReleaseResponse
+    ExecuteRequest,
+    ExecuteResponse,
+    ReleaseRequest,
 )
 from utils import raise_internal_error
 from worker_manager import WorkerManager
@@ -114,10 +116,9 @@ async def execute(request: ExecuteRequest) -> ExecuteResponse:
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-@app.post("/release", response_model=ReleaseResponse, dependencies=[Depends(verify_token)])
+@app.post("/release", status_code=HTTP_204_NO_CONTENT, dependencies=[Depends(verify_token)])
 async def release(request: ReleaseRequest):
     await WorkerManager.release_worker_by_user(request.user_uuid)
-    return ReleaseResponse(status="ok", detail=f"Worker for user {request.user_uuid} has been released.")
 
 @app.get(
     "/status",

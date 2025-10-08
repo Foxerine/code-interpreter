@@ -29,9 +29,5 @@ class ExecuteResponse(BaseModel):
 class ReleaseRequest(BaseModel):
     user_uuid: str
 
-class ReleaseResponse(BaseModel):
-    status: str
-    detail: str
-
 class ErrorDetail(BaseModel):
     detail: str
