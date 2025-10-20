@@ -1,0 +1,25 @@
+# 将所有文本文件的行尾设置为 LF，让 Git 自动处理转换
+* text=auto eol=lf
+
+# --- 以下是您的例外规则 ---
+
+# 对于 Windows PowerShell 脚本，强制保留 CRLF
+*.ps1 text eol=crlf
+
+# 对于 Windows 批处理文件，也强制保留 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 对于二进制文件，告诉 Git 不要进行任何行尾转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.exe binary
+*.dll binary
+*.so binary
+*.jar binary
+*.zip binary
+*.gz binary
+*.ttf binary
