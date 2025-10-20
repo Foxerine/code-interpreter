@@ -94,7 +94,7 @@ async def execute(request: ExecuteRequest) -> ExecuteResponse:
             if response.status_code == 503:
                 await WorkerManager.release_worker_by_user(request.user_uuid)
                 raise HTTPException(
-                    status_code=response.status_code,
+                    status_code=503,
                     detail="The code resulted in an execution timeout or a crashed environment or resource exhaustion. "
                            "The environment has been reset, "
                            "please try again."
@@ -102,7 +102,7 @@ async def execute(request: ExecuteRequest) -> ExecuteResponse:
 
             if response.status_code != 200:
                 error_detail = response.json().get("detail", "Worker returned an unknown error.")
-                raise HTTPException(status_code=response.status_code, detail=error_detail)
+                raise HTTPException(status_code=500, detail=error_detail)
             return ExecuteResponse(**response.json())
     except httpx.RequestError as e:
         l.error(f"Failed to proxy request to worker {worker.container_name}: {e}")
