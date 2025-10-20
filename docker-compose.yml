@@ -14,7 +14,7 @@ services:
       # 将宿主机的 Docker socket 挂载到容器内，以便 Gateway 可以管理其他容器
       - /var/run/docker.sock:/var/run/docker.sock
       # 挂载一个卷用于持久化 auth_token
-      - gateway_data:/gateway
+      - gateway_data:/gateway/persistent_data
       # Allows Gateway to create .img files inside Docker-managed volumes
       - virtual_disks:/virtual_disks
       - /dev:/dev
