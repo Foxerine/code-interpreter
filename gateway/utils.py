@@ -33,7 +33,7 @@ def raise_not_found(detail: str) -> NoReturn:
     """Raises an HTTP 404 Not Found exception."""
     raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=detail)
 
-def raise_internal_error(detail: str = "服务器出现故障，请稍后再试或联系管理员") -> NoReturn:
+def raise_internal_error(detail: str = "Internal server error. Please try again later or contact the administrator.") -> NoReturn:
     """Raises an HTTP 500 Internal Server Error exception."""
     raise HTTPException(status_code=HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
 
@@ -53,7 +53,7 @@ def raise_too_many_requests(detail: str) -> NoReturn:
     """Raises an HTTP 429 Too Many Requests exception."""
     raise HTTPException(status_code=HTTP_429_TOO_MANY_REQUESTS, detail=detail)
 
-def raise_not_implemented(detail: str = "尚未支持这种方法") -> NoReturn:
+def raise_not_implemented(detail: str = "This method is not yet supported.") -> NoReturn:
     """Raises an HTTP 501 Not Implemented exception."""
     raise HTTPException(status_code=HTTP_501_NOT_IMPLEMENTED, detail=detail)
 
@@ -65,7 +65,7 @@ def raise_gateway_timeout(detail: str) -> NoReturn:
     """Raises an HTTP 504 Gateway Timeout exception."""
     raise HTTPException(status_code=HTTP_504_GATEWAY_TIMEOUT, detail=detail)
 
-def raise_insufficient_quota(detail: str = "积分不足，请充值") -> NoReturn:
+def raise_insufficient_quota(detail: str = "Insufficient quota. Please recharge your account.") -> NoReturn:
     raise HTTPException(status_code=HTTP_402_PAYMENT_REQUIRED, detail=detail)
 
 # --- End of Request and Response Helpers ---

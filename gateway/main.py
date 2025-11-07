@@ -21,7 +21,7 @@ from worker_manager import WorkerManager
 async def lifespan(app: FastAPI):
     l.info(f"token: {config.AUTH_TOKEN}")
 
-    # [更新] 传递所有可配置的参数
+    # Pass all configurable parameters
     await WorkerManager.init(
         worker_image_name=config.WORKER_IMAGE_NAME,
         internal_network_name=config.INTERNAL_NETWORK_NAME,
@@ -50,16 +50,16 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],  # 允许所有方法 (GET, POST, OPTIONS 等)
-    allow_headers=["*"],  # 允许所有请求头 (包括 X-Auth-Token)
+    allow_methods=["*"],  # Allow all methods (GET, POST, OPTIONS, etc.)
+    allow_headers=["*"],  # Allow all headers (including X-Auth-Token)
 )
 
 @app.exception_handler(Exception)
 async def handle_unexpected_exceptions(request: Request, exc: Exception):
     """
-    捕获所有未经处理的异常，防止敏感信息泄露。
+    Catches all unhandled exceptions to prevent sensitive information leakage.
     """
-    # 1. 为开发人员记录详细的、包含完整堆栈跟踪的错误日志
+    # Log detailed error information with full stack trace for developers
     l.exception(
         f"An unhandled exception occurred for request: {request.method} {request.url.path}"
     )

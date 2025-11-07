@@ -47,7 +47,8 @@ async def execute_python_code(request: ExecuteRequest) -> ExecuteResponse:
             result_text=result.value if result.type != 'image_png_base64' else None,
         )
     elif result.status == "timeout":
-        # todo 引入更完善的自愈机制，现在的机制感觉有点惩罚用户，因为会失去所有的状态
+        # TODO: Introduce a more robust self-healing mechanism.
+        # The current mechanism penalizes users as they lose all state.
 
         # l.warning("Code execution timed out. Triggering kernel auto-reset.")
         # asyncio.create_task(JupyterKernelManager.reset_kernel())
