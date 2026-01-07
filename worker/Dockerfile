@@ -1,6 +1,6 @@
 # worker/Dockerfile
 
-FROM python:3.12-slim-bookworm
+FROM python:3.12.12-slim-bookworm
 
 LABEL maintainer="Foxerine"
 LABEL description="A self-contained, secure, stateful Python code interpreter WORKER."
