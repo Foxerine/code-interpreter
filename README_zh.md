@@ -43,7 +43,7 @@
 
 ## 架构解析
 
-1.  **API 网关 (Gateway)**: 唯一的、需认证的入口。其 `WorkerManager` 是整个系统的大脑，管理工作实例的整个生命周期，包括为其动态创建虚拟磁盘的复杂过程。它扮演着可信的控制平面角色。
+1.  **API 网关 (Gateway)**: 唯一的、需认证的入口。其 `WorkerPool` 是整个系统的大脑，管理工作实例的整个生命周期，包括为其动态创建虚拟磁盘的复杂过程。它扮演着可信的控制平面角色。
 2.  **工作实例 (Worker)**: 一个不可信的、一次性的代码执行单元。它运行一个 `Supervisor`，以一个非 root 的 `sandbox` 用户身份管理两个子进程（FastAPI 服务, Jupyter Kernel）。在启动时，一个脚本会先配置好 `iptables` 防火墙（只允许来自网关的流量），挂载其专属虚拟磁盘，然后再降级权限。
 
 ![高层系统架构图](images/high_level_architecture_zh.png)![请求流程时序图](images/request_flow_sequence_zh.png)
@@ -103,21 +103,93 @@ docker exec code-interpreter_gateway cat /gateway/auth_token.txt
 
 ## API 接口文档
 
-所有请求都需要 `X-Auth-Token: <你的令牌>` 请求头。
+所有端点都以 `/api/v1` 为前缀。所有请求都需要 `X-Auth-Token: <你的令牌>` 请求头。
 
-### 1. 执行代码 `POST /execute`
+### 1. 执行代码 `POST /api/v1/execute?user_uuid={uuid}`
 在用户的有状态会话中执行 Python 代码。
--   **请求体**: `{ "user_uuid": "string", "code": "string" }`
--   **成功响应 (200 OK)**: `{ "result_text": "string | null", "result_base64": "string | null" }`
+-   **查询参数**: `user_uuid` (必需) - 用户会话的 UUID 标识符
+-   **请求体**: `{ "code": "string" }`
+-   **成功响应 (200 OK)**: `{ "worker_id": "string", "result_text": "string | null", "result_base64": "string | null" }`
 -   **超时/崩溃响应 (503/504)**: 表示发生了致命错误。环境已被销毁和回收。
 
-### 2. 释放会话 `POST /release`
+### 2. 释放会话 `POST /api/v1/release?user_uuid={uuid}`
 主动终止一个用户的会话并销毁其工作实例。
--   **请求体**: `{ "user_uuid": "string" }`
--   **成功响应 (200 OK)**: `{ "status": "ok", "detail": "..." }`
+-   **查询参数**: `user_uuid` (必需) - 用户会话的 UUID 标识符
+-   **成功响应 (204 No Content)**
 
-### 3. 获取系统状态 `GET /status` (管理接口)
+### 3. 获取系统状态 `GET /api/v1/status` (管理接口)
 返回工作池状态的摘要信息，用于监控。
+-   **成功响应 (200 OK)**:
+    ```json
+    {
+        "total_workers": 10,
+        "busy_workers": 3,
+        "is_initializing": false
+    }
+    ```
+
+### 4. 批量上传文件到沙箱 `POST /api/v1/files?user_uuid={uuid}`
+从预签名 URL 批量下载文件并保存到用户的工作实例沙箱中。支持并发处理。
+-   **查询参数**: `user_uuid` (必需) - 用户会话的 UUID 标识符
+-   **限制**: 每次请求最多 100 个文件，单个文件最大 100MB
+-   **请求体**:
+    ```json
+    {
+        "files": [
+            {"download_url": "https://...", "path": "/sandbox/", "name": "data.xlsx"},
+            {"download_url": "https://...", "path": "/sandbox/", "name": "image.png"}
+        ]
+    }
+    ```
+-   **成功响应 (201 Created)**:
+    ```json
+    {
+        "success": true,
+        "results": [
+            {"full_path": "/sandbox/data.xlsx", "size": 12345},
+            {"full_path": "/sandbox/image.png", "size": 67890}
+        ]
+    }
+    ```
+
+### 5. 批量从沙箱导出文件 `POST /api/v1/files/export?user_uuid={uuid}`
+从沙箱读取文件并通过预签名 URL 上传到 OSS。支持并发处理。
+-   **查询参数**: `user_uuid` (必需) - 用户会话的 UUID 标识符
+-   **限制**: 每次请求最多 100 个文件
+-   **请求体**:
+    ```json
+    {
+        "files": [
+            {"path": "/sandbox/", "name": "result.xlsx", "upload_url": "https://..."},
+            {"path": "/sandbox/", "name": "chart.png", "upload_url": "https://..."}
+        ]
+    }
+    ```
+-   **成功响应 (200 OK)**:
+    ```json
+    {
+        "success": true,
+        "results": [
+            {"path": "/sandbox/", "name": "result.xlsx", "size": 8192},
+            {"path": "/sandbox/", "name": "chart.png", "size": 54321}
+        ]
+    }
+    ```
+
+### 6. 批量删除沙箱文件 `DELETE /api/v1/files?user_uuid={uuid}`
+批量删除用户工作实例沙箱中的文件。
+-   **查询参数**: `user_uuid` (必需) - 用户会话的 UUID 标识符
+-   **限制**: 每次请求最多 100 个文件
+-   **请求体**:
+    ```json
+    {
+        "files": [
+            {"path": "/sandbox/", "name": "temp.xlsx"},
+            {"path": "/sandbox/", "name": "old.png"}
+        ]
+    }
+    ```
+-   **成功响应 (204 No Content)**
 
 ## 使用示例 (Python)
 
@@ -143,9 +215,13 @@ def get_auth_token():
 
 async def execute_code(client: httpx.AsyncClient, code: str):
     print(f"\n--- 正在执行 ---\n{code.strip()}")
-    payload = {"user_uuid": USER_ID, "code": code}
     try:
-        response = await client.post(f"{GATEWAY_URL}/execute", json=payload, timeout=30.0)
+        response = await client.post(
+            f"{GATEWAY_URL}/api/v1/execute",
+            params={"user_uuid": USER_ID},
+            json={"code": code},
+            timeout=30.0
+        )
         response.raise_for_status()
         data = response.json()
         if data.get("result_text"):

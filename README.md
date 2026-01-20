@@ -43,7 +43,7 @@ Stress-tested on a mid-range desktop to validate its performance and scalability
 
 ## Architecture Overview
 
-1.  **API Gateway**: The single, authenticated entry point. Its `WorkerManager` manages the entire lifecycle of worker instances, including the dynamic creation of their virtual disks. It acts as the trusted control plane.
+1.  **API Gateway**: The single, authenticated entry point. Its `WorkerPool` manages the entire lifecycle of worker instances, including the dynamic creation of their virtual disks. It acts as the trusted control plane.
 2.  **Worker Instance**: An untrusted, disposable code execution unit. It runs a `Supervisor` that manages two processes (FastAPI service, Jupyter Kernel) as a non-root `sandbox` user. At startup, a script configures an `iptables` firewall to only accept traffic from the Gateway before dropping root privileges and mounting its dedicated virtual disk.
 
 ![High-Level System Architecture](images/high_level_architecture_en.png)![Request Flow Sequence Diagram](images/request_flow_sequence_en.png)
@@ -103,21 +103,93 @@ For a quick UI test, open the included `test.html` file in your browser, paste t
 
 ## API Documentation
 
-All requests require the `X-Auth-Token: <your-token>` header.
+All endpoints are prefixed with `/api/v1`. All requests require the `X-Auth-Token: <your-token>` header.
 
-### 1. Execute Code `POST /execute`
+### 1. Execute Code `POST /api/v1/execute?user_uuid={uuid}`
 Executes Python code within a user's stateful session.
--   **Request Body**: `{ "user_uuid": "string", "code": "string" }`
--   **Success Response (200 OK)**: `{ "result_text": "string | null", "result_base64": "string | null" }`
+-   **Query Parameter**: `user_uuid` (required) - UUID identifying the user session
+-   **Request Body**: `{ "code": "string" }`
+-   **Success Response (200 OK)**: `{ "worker_id": "string", "result_text": "string | null", "result_base64": "string | null" }`
 -   **Timeout/Crash Response (503/504)**: Indicates a fatal error. The environment has been destroyed and recycled.
 
-### 2. Release Session `POST /release`
+### 2. Release Session `POST /api/v1/release?user_uuid={uuid}`
 Proactively terminates a user's session and destroys its worker.
--   **Request Body**: `{ "user_uuid": "string" }`
--   **Success Response (200 OK)**: `{ "status": "ok", "detail": "..." }`
+-   **Query Parameter**: `user_uuid` (required) - UUID identifying the user session
+-   **Success Response (204 No Content)**
 
-### 3. Get System Status `GET /status` (Admin)
+### 3. Get System Status `GET /api/v1/status` (Admin)
 Returns a summary of the worker pool's status for monitoring.
+-   **Success Response (200 OK)**:
+    ```json
+    {
+        "total_workers": 10,
+        "busy_workers": 3,
+        "is_initializing": false
+    }
+    ```
+
+### 4. Batch Upload Files to Sandbox `POST /api/v1/files?user_uuid={uuid}`
+Downloads files from presigned URLs and saves them to the user's worker sandbox. Supports batch operations with concurrent processing.
+-   **Query Parameter**: `user_uuid` (required) - UUID identifying the user session
+-   **Limits**: Max 100 files per request, max 100MB per file
+-   **Request Body**:
+    ```json
+    {
+        "files": [
+            {"download_url": "https://...", "path": "/sandbox/", "name": "data.xlsx"},
+            {"download_url": "https://...", "path": "/sandbox/", "name": "image.png"}
+        ]
+    }
+    ```
+-   **Success Response (201 Created)**:
+    ```json
+    {
+        "success": true,
+        "results": [
+            {"full_path": "/sandbox/data.xlsx", "size": 12345},
+            {"full_path": "/sandbox/image.png", "size": 67890}
+        ]
+    }
+    ```
+
+### 5. Batch Export Files from Sandbox `POST /api/v1/files/export?user_uuid={uuid}`
+Reads files from sandbox and uploads them to OSS via presigned URLs. Supports batch operations with concurrent processing.
+-   **Query Parameter**: `user_uuid` (required) - UUID identifying the user session
+-   **Limits**: Max 100 files per request
+-   **Request Body**:
+    ```json
+    {
+        "files": [
+            {"path": "/sandbox/", "name": "result.xlsx", "upload_url": "https://..."},
+            {"path": "/sandbox/", "name": "chart.png", "upload_url": "https://..."}
+        ]
+    }
+    ```
+-   **Success Response (200 OK)**:
+    ```json
+    {
+        "success": true,
+        "results": [
+            {"path": "/sandbox/", "name": "result.xlsx", "size": 8192},
+            {"path": "/sandbox/", "name": "chart.png", "size": 54321}
+        ]
+    }
+    ```
+
+### 6. Batch Delete Files from Sandbox `DELETE /api/v1/files?user_uuid={uuid}`
+Deletes files from the user's worker sandbox. Supports batch operations.
+-   **Query Parameter**: `user_uuid` (required) - UUID identifying the user session
+-   **Limits**: Max 100 files per request
+-   **Request Body**:
+    ```json
+    {
+        "files": [
+            {"path": "/sandbox/", "name": "temp.xlsx"},
+            {"path": "/sandbox/", "name": "old.png"}
+        ]
+    }
+    ```
+-   **Success Response (204 No Content)**
 
 ## Usage Example (Python)
 
@@ -143,9 +215,13 @@ def get_auth_token():
 
 async def execute_code(client: httpx.AsyncClient, code: str):
     print(f"\n--- Executing ---\n{code.strip()}")
-    payload = {"user_uuid": USER_ID, "code": code}
     try:
-        response = await client.post(f"{GATEWAY_URL}/execute", json=payload, timeout=30.0)
+        response = await client.post(
+            f"{GATEWAY_URL}/api/v1/execute",
+            params={"user_uuid": USER_ID},
+            json={"code": code},
+            timeout=30.0
+        )
         response.raise_for_status()
         data = response.json()
         if data.get("result_text"):

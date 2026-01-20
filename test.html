@@ -6,354 +6,1264 @@
     <title>Code Interpreter API Test Client</title>
     <style>
         :root {
-            --bg-color: #f8f9fa;
-            --text-color: #212529;
-            --primary-color: #0d6efd;
-            --border-color: #dee2e6;
-            --pre-bg-color: #e9ecef;
-            --error-color: #dc3545;
-            --success-color: #198754;
+            --bg-color: #f5f5f5;
+            --card-bg: #ffffff;
+            --text-color: #333333;
+            --text-muted: #666666;
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --success-color: #16a34a;
+            --warning-color: #d97706;
+            --error-color: #dc2626;
+            --border-color: #e5e7eb;
+            --code-bg: #1e1e1e;
+            --code-text: #d4d4d4;
         }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            line-height: 1.6;
-            margin: 0;
-            padding: 20px;
             background-color: var(--bg-color);
             color: var(--text-color);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            line-height: 1.5;
+            padding: 20px;
         }
+
         .container {
-            width: 100%;
-            max-width: 800px;
-            background: #fff;
-            padding: 25px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            max-width: 1400px;
+            margin: 0 auto;
         }
-        h1, h2 {
+
+        header {
             text-align: center;
-            color: #333;
+            margin-bottom: 24px;
         }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
+
+        header h1 {
+            font-size: 24px;
             font-weight: 600;
-            margin-bottom: 5px;
+            margin-bottom: 8px;
         }
-        input[type="text"], textarea {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            box-sizing: border-box;
+
+        header p {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 1024px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .card h2 {
             font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
         }
+
+        .form-group {
+            margin-bottom: 14px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: var(--text-muted);
+        }
+
+        input[type="text"],
+        input[type="url"],
         textarea {
-            height: 200px;
-            font-family: Consolas, "Courier New", monospace;
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        input[readonly] {
+            background-color: var(--bg-color);
+            cursor: default;
+        }
+
+        textarea {
+            font-family: "SF Mono", "Monaco", "Consolas", monospace;
+            font-size: 13px;
             resize: vertical;
+            min-height: 200px;
         }
-        .button-group {
+
+        .input-with-btn {
             display: flex;
-            gap: 10px;
-            margin-top: 15px;
+            gap: 8px;
         }
-        button {
-            padding: 10px 15px;
+
+        .input-with-btn input {
+            flex: 1;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 500;
             border: none;
-            border-radius: 4px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
             background-color: var(--primary-color);
             color: white;
-            font-size: 16px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-            flex-grow: 1;
         }
-        button:hover {
-            background-color: #0b5ed7;
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: var(--primary-hover);
         }
-        button:disabled {
-            background-color: #6c757d;
+
+        .btn-secondary {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background-color: var(--border-color);
+        }
+
+        .btn-danger {
+            background-color: var(--error-color);
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background-color: #b91c1c;
+        }
+
+        .btn-success {
+            background-color: var(--success-color);
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background-color: #15803d;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
             cursor: not-allowed;
         }
-        button.secondary {
-            background-color: #6c757d;
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 13px;
         }
-        button.secondary:hover {
-            background-color: #5c636a;
+
+        .btn-block {
+            width: 100%;
         }
-        #session-controls {
+
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .btn-group .btn {
+            flex: 1;
+        }
+
+        /* Status Panel */
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .status-item {
+            text-align: center;
+            padding: 12px;
+            background: var(--bg-color);
+            border-radius: 6px;
+        }
+
+        .status-item .value {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .status-item .label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+
+        .status-item.initializing .value {
+            color: var(--warning-color);
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 16px;
+        }
+
+        .tab {
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-muted);
+            background: none;
+            border: none;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            color: var(--text-color);
+        }
+
+        .tab.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* File List */
+        .file-list {
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .file-item {
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: space-between;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 13px;
         }
-        #session-controls input {
-            flex-grow: 1;
+
+        .file-item:last-child {
+            border-bottom: none;
         }
-        #output-log {
-            margin-top: 25px;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            padding: 15px;
-            height: 400px;
+
+        .file-item .file-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            overflow: hidden;
+        }
+
+        .file-item .file-path {
+            color: var(--text-muted);
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-item .btn-sm {
+            flex-shrink: 0;
+        }
+
+        .empty-state {
+            padding: 24px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        /* Log Area */
+        .log-container {
+            background: var(--code-bg);
+            border-radius: 8px;
+            min-height: 500px;
+            max-height: calc(100vh - 200px);
             overflow-y: auto;
-            background-color: var(--bg-color);
+            font-family: "SF Mono", "Monaco", "Consolas", monospace;
+            font-size: 13px;
         }
+
         .log-entry {
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-            border-bottom: 1px dashed var(--border-color);
+            padding: 16px;
+            border-bottom: 1px solid #333;
         }
+
         .log-entry:last-child {
             border-bottom: none;
         }
-        pre {
-            background-color: var(--pre-bg-color);
-            padding: 10px;
+
+        .log-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .log-type {
+            padding: 2px 8px;
             border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .log-type.execute {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .log-type.status {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .log-type.files {
+            background: var(--warning-color);
+            color: white;
+        }
+
+        .log-type.release {
+            background: #6b7280;
+            color: white;
+        }
+
+        .log-type.error {
+            background: var(--error-color);
+            color: white;
+        }
+
+        .log-time {
+            color: #888;
+            font-size: 11px;
+        }
+
+        .log-worker {
+            color: #888;
+            font-size: 11px;
+            margin-left: auto;
+        }
+
+        .log-section {
+            margin-bottom: 12px;
+        }
+
+        .log-section-title {
+            color: #888;
+            font-size: 11px;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+        }
+
+        .log-code {
+            background: #2d2d2d;
+            padding: 12px;
+            border-radius: 4px;
+            color: var(--code-text);
             white-space: pre-wrap;
-            word-wrap: break-word;
-            margin: 5px 0;
+            word-break: break-all;
+            overflow-x: auto;
         }
-        .log-input pre {
-            background-color: #dbeafe;
+
+        .log-code.input {
+            border-left: 3px solid var(--primary-color);
         }
-        .log-output pre, .log-output img {
-            background-color: #e9ecef;
+
+        .log-code.output {
+            border-left: 3px solid var(--success-color);
         }
-        .log-error pre {
-            background-color: #f8d7da;
+
+        .log-code.error {
+            border-left: 3px solid var(--error-color);
+            color: #f87171;
+        }
+
+        .log-image {
+            max-width: 100%;
+            border-radius: 4px;
+            margin-top: 8px;
+        }
+
+        .log-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+            color: #666;
+        }
+
+        .log-empty svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+
+        /* Badge */
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 500;
+            border-radius: 10px;
+        }
+
+        .badge-success {
+            background: #dcfce7;
+            color: var(--success-color);
+        }
+
+        .badge-warning {
+            background: #fef3c7;
+            color: var(--warning-color);
+        }
+
+        .badge-error {
+            background: #fee2e2;
             color: var(--error-color);
         }
-        .log-status {
-            font-style: italic;
-            color: #6c757d;
+
+        /* Alert */
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-bottom: 12px;
         }
-        img.result-image {
-            max-width: 100%;
-            height: auto;
-            border: 1px solid var(--border-color);
-            margin-top: 10px;
-            display: block;
+
+        .alert-info {
+            background: #dbeafe;
+            color: #1e40af;
         }
+
+        .alert-success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* Spinner */
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid transparent;
+            border-top-color: currentColor;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Utilities */
+        .hidden {
+            display: none !important;
+        }
+
+        .text-muted {
+            color: var(--text-muted);
+        }
+
+        .text-small {
+            font-size: 12px;
+        }
+
+        .mt-2 { margin-top: 8px; }
+        .mt-3 { margin-top: 12px; }
+        .mb-2 { margin-bottom: 8px; }
+        .mb-3 { margin-bottom: 12px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>Code Interpreter Test Client</h1>
+    <header>
+        <h1>Code Interpreter API Test Client</h1>
+        <p>Interactive testing tool for code execution sandbox API</p>
+    </header>
 
-    <h2>1. Configuration</h2>
-    <div class="form-group">
-        <label for="gateway-url">Gateway URL</label>
-        <input type="text" id="gateway-url" value="http://127.0.0.1:3874">
-    </div>
-    <div class="form-group">
-        <label for="auth-token">Auth Token (X-Auth-Token)</label>
-        <input type="text" id="auth-token" placeholder="Paste your token here">
-    </div>
-    <div class="form-group">
-        <label for="user-uuid">Current Session UUID</label>
-        <div id="session-controls">
-            <input type="text" id="user-uuid" readonly>
-            <button id="regenerate-uuid" class="secondary" title="Start a new session">New Session</button>
+    <div class="grid">
+        <!-- Left Sidebar -->
+        <div class="sidebar">
+            <!-- Configuration -->
+            <div class="card">
+                <h2>Configuration</h2>
+                <div class="form-group">
+                    <label>Gateway URL</label>
+                    <input type="url" id="gateway-url" value="http://127.0.0.1:3874">
+                </div>
+                <div class="form-group">
+                    <label>Auth Token (X-Auth-Token)</label>
+                    <input type="text" id="auth-token" placeholder="Enter your auth token">
+                </div>
+                <div class="form-group">
+                    <label>Session UUID</label>
+                    <div class="input-with-btn">
+                        <input type="text" id="session-uuid" readonly>
+                        <button class="btn btn-secondary btn-sm" id="btn-new-session" title="Generate new UUID">New</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Status -->
+            <div class="card">
+                <h2>System Status</h2>
+                <div class="status-grid">
+                    <div class="status-item">
+                        <div class="value" id="status-total">-</div>
+                        <div class="label">Total</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="value" id="status-busy">-</div>
+                        <div class="label">Busy</div>
+                    </div>
+                    <div class="status-item" id="status-init-container">
+                        <div class="value" id="status-init">-</div>
+                        <div class="label">Init</div>
+                    </div>
+                </div>
+                <button class="btn btn-secondary btn-block btn-sm" id="btn-refresh-status">
+                    Refresh Status
+                </button>
+            </div>
+
+            <!-- Session Management -->
+            <div class="card">
+                <h2>Session Management</h2>
+                <p class="text-small text-muted mb-3">Release the current session to free up worker resources.</p>
+                <button class="btn btn-danger btn-block" id="btn-release">
+                    Release Session
+                </button>
+            </div>
         </div>
-    </div>
 
-    <h2>2. Code Execution</h2>
-    <div class="form-group">
-        <label for="code-input">Python Code</label>
-        <textarea id="code-input" placeholder="a = 10&#10;b = 20&#10;print(f'The sum is {a + b}')"></textarea>
-    </div>
-    <div class="button-group">
-        <button id="run-button">Run Code</button>
-        <button id="release-button" class="secondary">Release Session</button>
-    </div>
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="card">
+                <!-- Tabs -->
+                <div class="tabs">
+                    <button class="tab active" data-tab="execute">Code Execution</button>
+                    <button class="tab" data-tab="files">File Operations</button>
+                </div>
 
-    <h2>3. Session Log</h2>
-    <div id="output-log">
-        <div class="log-status">Ready to execute code...</div>
+                <!-- Execute Tab -->
+                <div class="tab-content active" id="tab-execute">
+                    <div class="form-group">
+                        <label>Python Code</label>
+                        <textarea id="code-input" placeholder="# Enter your Python code here
+a = 10
+b = 20
+print(f'Sum: {a + b}')"></textarea>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" id="btn-execute">
+                            Execute Code
+                        </button>
+                        <button class="btn btn-secondary" id="btn-clear-code">
+                            Clear
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Files Tab -->
+                <div class="tab-content" id="tab-files">
+                    <!-- Upload Section -->
+                    <div class="form-group">
+                        <label>Upload File to Sandbox</label>
+                        <div class="input-with-btn mb-2">
+                            <input type="text" id="upload-path" placeholder="/sandbox/data" value="/sandbox">
+                        </div>
+                        <div class="input-with-btn mb-2">
+                            <input type="text" id="upload-name" placeholder="filename.txt">
+                        </div>
+                        <div class="input-with-btn mb-2">
+                            <input type="url" id="upload-url" placeholder="https://example.com/file.txt (presigned URL)">
+                        </div>
+                        <button class="btn btn-success btn-sm" id="btn-upload">
+                            Upload File
+                        </button>
+                    </div>
+
+                    <hr style="margin: 20px 0; border: none; border-top: 1px solid var(--border-color);">
+
+                    <!-- Export Section -->
+                    <div class="form-group">
+                        <label>Export File from Sandbox</label>
+                        <div class="input-with-btn mb-2">
+                            <input type="text" id="export-path" placeholder="/sandbox/output" value="/sandbox">
+                        </div>
+                        <div class="input-with-btn mb-2">
+                            <input type="text" id="export-name" placeholder="result.csv">
+                        </div>
+                        <div class="input-with-btn mb-2">
+                            <input type="url" id="export-url" placeholder="https://example.com/upload (presigned URL)">
+                        </div>
+                        <button class="btn btn-primary btn-sm" id="btn-export">
+                            Export File
+                        </button>
+                    </div>
+
+                    <hr style="margin: 20px 0; border: none; border-top: 1px solid var(--border-color);">
+
+                    <!-- Delete Section -->
+                    <div class="form-group">
+                        <label>Delete File from Sandbox</label>
+                        <div class="input-with-btn mb-2">
+                            <input type="text" id="delete-path" placeholder="/sandbox" value="/sandbox">
+                        </div>
+                        <div class="input-with-btn mb-2">
+                            <input type="text" id="delete-name" placeholder="unwanted.txt">
+                        </div>
+                        <button class="btn btn-danger btn-sm" id="btn-delete">
+                            Delete File
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Execution Log -->
+            <div class="card">
+                <h2>Execution Log</h2>
+                <div class="log-container" id="log-container">
+                    <div class="log-empty">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span>No executions yet. Run some code to see results.</span>
+                    </div>
+                </div>
+                <button class="btn btn-secondary btn-sm mt-3" id="btn-clear-log">
+                    Clear Log
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
-    // --- DOM Elements ---
-    const gatewayUrlInput = document.getElementById('gateway-url');
-    const authTokenInput = document.getElementById('auth-token');
-    const userUuidInput = document.getElementById('user-uuid');
-    const codeInput = document.getElementById('code-input');
-    const runButton = document.getElementById('run-button');
-    const releaseButton = document.getElementById('release-button');
-    const regenerateUuidButton = document.getElementById('regenerate-uuid');
-    const outputLog = document.getElementById('output-log');
+// ============================================================
+// DOM Elements
+// ============================================================
+const elements = {
+    gatewayUrl: document.getElementById('gateway-url'),
+    authToken: document.getElementById('auth-token'),
+    sessionUuid: document.getElementById('session-uuid'),
+    codeInput: document.getElementById('code-input'),
+    logContainer: document.getElementById('log-container'),
+    // Status
+    statusTotal: document.getElementById('status-total'),
+    statusBusy: document.getElementById('status-busy'),
+    statusInit: document.getElementById('status-init'),
+    statusInitContainer: document.getElementById('status-init-container'),
+    // Buttons
+    btnNewSession: document.getElementById('btn-new-session'),
+    btnRefreshStatus: document.getElementById('btn-refresh-status'),
+    btnRelease: document.getElementById('btn-release'),
+    btnExecute: document.getElementById('btn-execute'),
+    btnClearCode: document.getElementById('btn-clear-code'),
+    btnClearLog: document.getElementById('btn-clear-log'),
+    // File inputs
+    uploadPath: document.getElementById('upload-path'),
+    uploadName: document.getElementById('upload-name'),
+    uploadUrl: document.getElementById('upload-url'),
+    exportPath: document.getElementById('export-path'),
+    exportName: document.getElementById('export-name'),
+    exportUrl: document.getElementById('export-url'),
+    deletePath: document.getElementById('delete-path'),
+    deleteName: document.getElementById('delete-name'),
+    // File buttons
+    btnUpload: document.getElementById('btn-upload'),
+    btnExport: document.getElementById('btn-export'),
+    btnDelete: document.getElementById('btn-delete'),
+};
 
-    // --- Functions ---
+// ============================================================
+// Utility Functions
+// ============================================================
 
-    /** Generates a v4 UUID */
-    function generateUUID() {
-        return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
-            (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
-        );
+function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+}
+
+function getTimestamp() {
+    return new Date().toLocaleTimeString('en-US', { hour12: false });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function getConfig() {
+    return {
+        gatewayUrl: elements.gatewayUrl.value.trim().replace(/\/$/, ''),
+        authToken: elements.authToken.value.trim(),
+        sessionUuid: elements.sessionUuid.value.trim(),
+    };
+}
+
+function validateConfig(requireSession = true) {
+    const config = getConfig();
+    if (!config.gatewayUrl) {
+        alert('Please enter Gateway URL');
+        return null;
+    }
+    if (!config.authToken) {
+        alert('Please enter Auth Token');
+        return null;
+    }
+    if (requireSession && !config.sessionUuid) {
+        alert('Please ensure Session UUID is set');
+        return null;
+    }
+    return config;
+}
+
+// ============================================================
+// Logging Functions
+// ============================================================
+
+let hasLogs = false;
+
+function clearLogEmptyState() {
+    if (!hasLogs) {
+        elements.logContainer.innerHTML = '';
+        hasLogs = true;
+    }
+}
+
+function addLogEntry({ type, title, input, output, error, workerId, extra }) {
+    clearLogEmptyState();
+
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
+
+    let html = `
+        <div class="log-header">
+            <span class="log-type ${type}">${type}</span>
+            <span class="log-time">${getTimestamp()}</span>
+            ${workerId ? `<span class="log-worker">Worker: ${escapeHtml(workerId)}</span>` : ''}
+        </div>
+    `;
+
+    if (input) {
+        html += `
+            <div class="log-section">
+                <div class="log-section-title">Input</div>
+                <pre class="log-code input">${escapeHtml(input)}</pre>
+            </div>
+        `;
     }
 
-    /** Clears the log and adds a message */
-    function clearLog(message) {
-        outputLog.innerHTML = `<div class="log-status">${message}</div>`;
+    if (output !== undefined && output !== null) {
+        html += `
+            <div class="log-section">
+                <div class="log-section-title">Output</div>
+                <pre class="log-code output">${escapeHtml(output)}</pre>
+            </div>
+        `;
     }
 
-    /** Appends a new entry to the log */
-    function appendToLog(entry) {
-        const isScrolledToBottom = outputLog.scrollHeight - outputLog.clientHeight <= outputLog.scrollTop + 1;
+    if (error) {
+        html += `
+            <div class="log-section">
+                <div class="log-section-title">Error</div>
+                <pre class="log-code error">${escapeHtml(error)}</pre>
+            </div>
+        `;
+    }
 
-        const firstEntry = outputLog.querySelector('.log-status');
-        if (firstEntry) {
-            outputLog.innerHTML = '';
+    if (extra) {
+        html += extra;
+    }
+
+    entry.innerHTML = html;
+    elements.logContainer.appendChild(entry);
+    elements.logContainer.scrollTop = elements.logContainer.scrollHeight;
+}
+
+function addImageToLog(base64Data) {
+    const lastEntry = elements.logContainer.lastElementChild;
+    if (lastEntry) {
+        const img = document.createElement('img');
+        img.className = 'log-image';
+        img.src = `data:image/png;base64,${base64Data}`;
+        img.alt = 'Execution result';
+        lastEntry.appendChild(img);
+    }
+}
+
+// ============================================================
+// API Functions
+// ============================================================
+
+async function apiRequest(endpoint, method, body = null, queryParams = {}) {
+    const config = validateConfig(endpoint !== '/api/v1/status');
+    if (!config) return null;
+
+    const options = {
+        method,
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Auth-Token': config.authToken,
+        },
+    };
+
+    if (body) {
+        options.body = JSON.stringify(body);
+    }
+
+    // Build URL with query parameters
+    let url = `${config.gatewayUrl}${endpoint}`;
+    const params = new URLSearchParams(queryParams);
+    if (params.toString()) {
+        url += `?${params.toString()}`;
+    }
+
+    const response = await fetch(url, options);
+    return response;
+}
+
+// Get Status
+async function getStatus() {
+    const btn = elements.btnRefreshStatus;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Loading...';
+
+    try {
+        const response = await apiRequest('/api/v1/status', 'GET');
+        if (!response) return;
+
+        if (response.ok) {
+            const data = await response.json();
+            elements.statusTotal.textContent = data.total_workers;
+            elements.statusBusy.textContent = data.busy_workers;
+            elements.statusInit.textContent = data.is_initializing ? 'Yes' : 'No';
+            elements.statusInitContainer.classList.toggle('initializing', data.is_initializing);
+
+            addLogEntry({
+                type: 'status',
+                output: JSON.stringify(data, null, 2),
+            });
+        } else {
+            const data = await response.json().catch(() => ({}));
+            addLogEntry({
+                type: 'error',
+                error: `Status Error (${response.status}): ${data.detail || response.statusText}`,
+            });
         }
-        outputLog.appendChild(entry);
+    } catch (err) {
+        addLogEntry({
+            type: 'error',
+            error: `Network Error: ${err.message}`,
+        });
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Refresh Status';
+    }
+}
 
-        if (isScrolledToBottom) {
-            outputLog.scrollTop = outputLog.scrollHeight;
-        }
+// Execute Code
+async function executeCode() {
+    const code = elements.codeInput.value;
+    if (!code.trim()) {
+        alert('Please enter some code to execute');
+        return;
     }
 
-    /** Creates a log entry element */
-    function createLogEntry(code, resultElement) {
-        const entryDiv = document.createElement('div');
-        entryDiv.className = 'log-entry';
+    const config = validateConfig();
+    if (!config) return;
 
-        const inputHeader = document.createElement('strong');
-        inputHeader.textContent = 'Input Code:';
-        const inputPre = document.createElement('pre');
-        inputPre.textContent = code;
-        const inputDiv = document.createElement('div');
-        inputDiv.className = 'log-input';
-        inputDiv.append(inputHeader, inputPre);
+    const btn = elements.btnExecute;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Executing...';
 
-        const outputHeader = document.createElement('strong');
-        outputHeader.textContent = 'Result:';
-        const outputDiv = document.createElement('div');
-        // 【修正】根据 resultElement 是否有 'log-error' class 来决定父 div 的 class
-        outputDiv.className = resultElement.classList.contains('log-error') ? 'log-error' : 'log-output';
-        outputDiv.append(outputHeader, resultElement);
+    try {
+        const response = await apiRequest('/api/v1/execute', 'POST', {
+            code: code,
+        }, { user_uuid: config.sessionUuid });
 
-        entryDiv.append(inputDiv, outputDiv);
-        return entryDiv;
-    }
+        if (!response) return;
 
-    /** Handles code execution */
-    async function handleExecute() {
-        // 【修正】为所有输入都添加 .trim() 增加健壮性
-        const gatewayUrl = gatewayUrlInput.value.trim();
-        const authToken = authTokenInput.value.trim();
-        const userUuid = userUuidInput.value.trim();
-        const code = codeInput.value.trim();
+        const data = await response.json();
 
-        if (!gatewayUrl || !authToken || !userUuid || !code) {
-            alert('Please fill in all fields: Gateway URL, Auth Token, and Code.');
-            return;
-        }
-
-        runButton.disabled = true;
-        runButton.textContent = 'Executing...';
-
-        let resultElement;
-        try {
-            const response = await fetch(`${gatewayUrl}/execute`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Auth-Token': authToken
-                },
-                body: JSON.stringify({
-                    user_uuid: userUuid,
-                    code: code
-                })
+        if (response.ok) {
+            addLogEntry({
+                type: 'execute',
+                input: code,
+                output: data.result_text || '(No text output)',
+                workerId: data.worker_id,
             });
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                resultElement = document.createElement('pre');
-                // 【修正】直接给 resultElement 本身添加 class，而不是给它不存在的 parentElement
-                resultElement.classList.add('log-error');
-                resultElement.textContent = `Error ${response.status}: ${data.detail || JSON.stringify(data)}`;
-            } else {
-                if (data.result_base64) {
-                    resultElement = document.createElement('img');
-                    resultElement.className = 'result-image';
-                    resultElement.src = `data:image/png;base64,${data.result_base64}`;
-                } else {
-                    resultElement = document.createElement('pre');
-                    resultElement.textContent = data.result_text ?? '(No text output)';
-                }
+            if (data.result_base64) {
+                addImageToLog(data.result_base64);
             }
-        } catch (error) {
-            resultElement = document.createElement('pre');
-            // 【修正】同样，直接给 resultElement 本身添加 class
-            resultElement.classList.add('log-error');
-            resultElement.textContent = `Network or fetch error: ${error.message}`;
-        } finally {
-            runButton.disabled = false;
-            runButton.textContent = 'Run Code';
-            if (resultElement) { // 确保 resultElement 存在
-                const logEntry = createLogEntry(code, resultElement);
-                appendToLog(logEntry);
-            }
-        }
-    }
-
-    /** Handles session release */
-    async function handleRelease() {
-        const gatewayUrl = gatewayUrlInput.value.trim();
-        const authToken = authTokenInput.value.trim();
-        const userUuid = userUuidInput.value.trim();
-
-        if (!gatewayUrl || !authToken || !userUuid) {
-            alert('Please provide Gateway URL and Auth Token.');
-            return;
-        }
-
-        releaseButton.disabled = true;
-        releaseButton.textContent = 'Releasing...';
-        try {
-            const response = await fetch(`${gatewayUrl}/release`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Auth-Token': authToken
-                },
-                body: JSON.stringify({ user_uuid: userUuid })
+        } else {
+            addLogEntry({
+                type: 'error',
+                input: code,
+                error: `Error (${response.status}): ${data.detail || JSON.stringify(data)}`,
             });
-
-            const data = await response.json();
-            const message = response.ok ? `Success: ${data.detail}` : `Error: ${data.detail}`;
-            clearLog(`Session ${userUuid} released. ${message}. Start a new session by clicking 'New Session'.`);
-
-        } catch (error) {
-            alert(`Failed to release session: ${error.message}`);
-        } finally {
-            releaseButton.disabled = false;
-            releaseButton.textContent = 'Release Session';
         }
+    } catch (err) {
+        addLogEntry({
+            type: 'error',
+            input: code,
+            error: `Network Error: ${err.message}`,
+        });
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Execute Code';
+    }
+}
+
+// Release Session
+async function releaseSession() {
+    const config = validateConfig();
+    if (!config) return;
+
+    if (!confirm('Are you sure you want to release this session?')) {
+        return;
     }
 
-    /** Starts a new session */
-    function startNewSession() {
-        userUuidInput.value = generateUUID();
-        clearLog(`New session started with UUID: ${userUuidInput.value}. Ready to execute code...`);
+    const btn = elements.btnRelease;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Releasing...';
+
+    try {
+        const response = await apiRequest('/api/v1/release', 'POST', null, {
+            user_uuid: config.sessionUuid,
+        });
+
+        if (!response) return;
+
+        if (response.status === 204 || response.ok) {
+            addLogEntry({
+                type: 'release',
+                output: `Session ${config.sessionUuid} released successfully`,
+            });
+            // Generate new session
+            elements.sessionUuid.value = generateUUID();
+        } else {
+            const data = await response.json().catch(() => ({}));
+            addLogEntry({
+                type: 'error',
+                error: `Release Error (${response.status}): ${data.detail || response.statusText}`,
+            });
+        }
+    } catch (err) {
+        addLogEntry({
+            type: 'error',
+            error: `Network Error: ${err.message}`,
+        });
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Release Session';
+    }
+}
+
+// Upload File
+async function uploadFile() {
+    const path = elements.uploadPath.value.trim();
+    const name = elements.uploadName.value.trim();
+    const downloadUrl = elements.uploadUrl.value.trim();
+
+    if (!path || !name || !downloadUrl) {
+        alert('Please fill in all upload fields (path, name, and download URL)');
+        return;
     }
 
-    // --- Event Listeners ---
-    document.addEventListener('DOMContentLoaded', startNewSession);
-    runButton.addEventListener('click', handleExecute);
-    releaseButton.addEventListener('click', handleRelease);
-    regenerateUuidButton.addEventListener('click', startNewSession);
+    const config = validateConfig();
+    if (!config) return;
 
+    const btn = elements.btnUpload;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Uploading...';
+
+    try {
+        const response = await apiRequest('/api/v1/files', 'POST', {
+            files: [{ path, name, download_url: downloadUrl }],
+        }, { user_uuid: config.sessionUuid });
+
+        if (!response) return;
+
+        const data = await response.json();
+
+        if (response.ok || response.status === 201) {
+            addLogEntry({
+                type: 'files',
+                input: `Upload: ${path}/${name}\nFrom: ${downloadUrl}`,
+                output: JSON.stringify(data, null, 2),
+            });
+        } else {
+            addLogEntry({
+                type: 'error',
+                error: `Upload Error (${response.status}): ${data.detail || JSON.stringify(data)}`,
+            });
+        }
+    } catch (err) {
+        addLogEntry({
+            type: 'error',
+            error: `Network Error: ${err.message}`,
+        });
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Upload File';
+    }
+}
+
+// Export File
+async function exportFile() {
+    const path = elements.exportPath.value.trim();
+    const name = elements.exportName.value.trim();
+    const uploadUrl = elements.exportUrl.value.trim();
+
+    if (!path || !name || !uploadUrl) {
+        alert('Please fill in all export fields (path, name, and upload URL)');
+        return;
+    }
+
+    const config = validateConfig();
+    if (!config) return;
+
+    const btn = elements.btnExport;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Exporting...';
+
+    try {
+        const response = await apiRequest('/api/v1/files/export', 'POST', {
+            files: [{ path, name, upload_url: uploadUrl }],
+        }, { user_uuid: config.sessionUuid });
+
+        if (!response) return;
+
+        const data = await response.json();
+
+        if (response.ok) {
+            addLogEntry({
+                type: 'files',
+                input: `Export: ${path}/${name}\nTo: ${uploadUrl}`,
+                output: JSON.stringify(data, null, 2),
+            });
+        } else {
+            addLogEntry({
+                type: 'error',
+                error: `Export Error (${response.status}): ${data.detail || JSON.stringify(data)}`,
+            });
+        }
+    } catch (err) {
+        addLogEntry({
+            type: 'error',
+            error: `Network Error: ${err.message}`,
+        });
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Export File';
+    }
+}
+
+// Delete File
+async function deleteFile() {
+    const path = elements.deletePath.value.trim();
+    const name = elements.deleteName.value.trim();
+
+    if (!path || !name) {
+        alert('Please fill in path and file name to delete');
+        return;
+    }
+
+    const config = validateConfig();
+    if (!config) return;
+
+    if (!confirm(`Are you sure you want to delete ${path}/${name}?`)) {
+        return;
+    }
+
+    const btn = elements.btnDelete;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Deleting...';
+
+    try {
+        const response = await apiRequest('/api/v1/files', 'DELETE', {
+            files: [{ path, name }],
+        }, { user_uuid: config.sessionUuid });
+
+        if (!response) return;
+
+        if (response.status === 204) {
+            addLogEntry({
+                type: 'files',
+                input: `Delete: ${path}/${name}`,
+                output: 'File deleted successfully',
+            });
+        } else {
+            const data = await response.json().catch(() => ({}));
+            addLogEntry({
+                type: 'error',
+                error: `Delete Error (${response.status}): ${data.detail || response.statusText}`,
+            });
+        }
+    } catch (err) {
+        addLogEntry({
+            type: 'error',
+            error: `Network Error: ${err.message}`,
+        });
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Delete File';
+    }
+}
+
+// ============================================================
+// Tab Management
+// ============================================================
+
+function setupTabs() {
+    const tabs = document.querySelectorAll('.tab');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            // Remove active from all tabs
+            tabs.forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            // Activate clicked tab
+            tab.classList.add('active');
+            const tabId = tab.dataset.tab;
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+        });
+    });
+}
+
+// ============================================================
+// Event Listeners
+// ============================================================
+
+function setupEventListeners() {
+    // Session
+    elements.btnNewSession.addEventListener('click', () => {
+        elements.sessionUuid.value = generateUUID();
+    });
+
+    // Status
+    elements.btnRefreshStatus.addEventListener('click', getStatus);
+
+    // Execute
+    elements.btnExecute.addEventListener('click', executeCode);
+    elements.btnClearCode.addEventListener('click', () => {
+        elements.codeInput.value = '';
+    });
+
+    // Release
+    elements.btnRelease.addEventListener('click', releaseSession);
+
+    // Files
+    elements.btnUpload.addEventListener('click', uploadFile);
+    elements.btnExport.addEventListener('click', exportFile);
+    elements.btnDelete.addEventListener('click', deleteFile);
+
+    // Clear Log
+    elements.btnClearLog.addEventListener('click', () => {
+        hasLogs = false;
+        elements.logContainer.innerHTML = `
+            <div class="log-empty">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span>No executions yet. Run some code to see results.</span>
+            </div>
+        `;
+    });
+
+    // Keyboard shortcut: Ctrl+Enter to execute
+    elements.codeInput.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            executeCode();
+        }
+    });
+}
+
+// ============================================================
+// Initialization
+// ============================================================
+
+function init() {
+    // Generate initial session UUID
+    elements.sessionUuid.value = generateUUID();
+
+    // Setup tabs
+    setupTabs();
+
+    // Setup event listeners
+    setupEventListeners();
+}
+
+// Start the application
+document.addEventListener('DOMContentLoaded', init);
 </script>
+
 </body>
 </html>

@@ -1,7 +1,7 @@
 FROM python:3.12.12-slim-bookworm
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends e2fsprogs util-linux && \
+    apt-get install -y --no-install-recommends e2fsprogs util-linux git && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -10,11 +10,16 @@ LABEL description="Gateway and manager for the Python code interpreter."
 
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /uvx /bin/
 
 WORKDIR /gateway
 COPY ./requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
 COPY . /gateway
 

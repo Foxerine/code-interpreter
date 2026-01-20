@@ -21,12 +21,15 @@ RUN useradd --create-home -d /sandbox --shell /bin/bash sandbox && \
 COPY ./assets/simhei.ttf /usr/share/fonts/truetype/
 RUN fc-cache -fv
 
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /uvx /bin/
+
 # Install Python dependencies
 WORKDIR /worker
-# [更新] 将 PYTHONPATH 设置为 /worker，以便在 /sandbox 中也能导入应用代码
-ENV PYTHONPATH=/worker
+ENV PYTHONPATH=/
 COPY ./requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
 RUN ipython kernel install --name "python3" --user
 

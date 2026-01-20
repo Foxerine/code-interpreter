@@ -30,10 +30,16 @@ def get_auth_token():
 async def execute_code(client: httpx.AsyncClient, session_id: str, code: str):
     """一个辅助函数，用于发送执行请求并打印结果。"""
     print(f"\n--- 正在执行代码 ---\n{code.strip()}")
-    payload = {"user_uuid": session_id, "code": code}
+    payload = {"code": code}
 
     try:
-        response = await client.post(f"{GATEWAY_URL}/execute", json=payload, headers=HEADERS, timeout=30.0)
+        response = await client.post(
+            f"{GATEWAY_URL}/api/v1/execute",
+            params={"user_uuid": session_id},
+            json=payload,
+            headers=HEADERS,
+            timeout=30.0
+        )
         response.raise_for_status() # 如果状态码不是 2xx，则抛出异常
 
         data = response.json()
@@ -56,9 +62,14 @@ async def execute_code(client: httpx.AsyncClient, session_id: str, code: str):
 async def release_session(client: httpx.AsyncClient, session_id: str):
     """辅助函数，用于释放会话。"""
     print("\n--- 正在释放工作实例 ---")
-    release_payload = {"user_uuid": session_id}
-    response = await client.post(f"{GATEWAY_URL}/release", json=release_payload, headers=HEADERS)
-    if response.status_code == 200:
+    response = await client.post(
+        f"{GATEWAY_URL}/api/v1/release",
+        params={"user_uuid": session_id},
+        headers=HEADERS
+    )
+    if response.status_code == 204:
+        print("成功释放会话")
+    elif response.status_code == 200:
         print("成功释放:", response.json().get('detail'))
     else:
         print("释放失败:", response.text)

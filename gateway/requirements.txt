@@ -1,7 +1,8 @@
 fastapi
 uvicorn[standard]
 loguru
-httpx
+aiohttp
 pydantic
 aiodocker
 aiofiles
+ssrf-protect @ git+https://github.com/kobotoolbox/ssrf-protect.git

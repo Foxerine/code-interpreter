@@ -1,0 +1,62 @@
+# gateway/meta_config.py
+"""
+Configuration management for the gateway service.
+
+This module provides centralized configuration loaded from environment variables.
+"""
+import os
+import secrets
+from pathlib import Path
+
+
+# --- Authentication ---
+def get_auth_token() -> str:
+    token_file = Path('/gateway/auth_token.txt')
+    if 'AUTH_TOKEN' in os.environ:
+        return os.environ['AUTH_TOKEN']
+    elif token_file.exists():
+        return token_file.read_text().strip()
+    else:
+        # Generate cryptographically secure token (32 bytes = 256 bits)
+        new_token = secrets.token_urlsafe(32)
+        token_file.write_text(new_token)
+        token_file.chmod(0o600)  # Restrict file permissions to owner only
+        return new_token
+
+
+AUTH_TOKEN: str = get_auth_token()
+
+# --- Network & Naming ---
+INTERNAL_NETWORK_NAME: str = os.environ.get("INTERNAL_NETWORK_NAME", "code-interpreter_workers_isolated_net")
+WORKER_IMAGE_NAME: str = "code-interpreter-worker:latest"
+GATEWAY_INTERNAL_IP = os.environ.get("GATEWAY_INTERNAL_IP", "172.28.0.2")
+
+# --- Pool & Resource Configuration (now from environment variables) ---
+
+# Pool Sizing
+MIN_IDLE_WORKERS: int = int(os.environ.get("MIN_IDLE_WORKERS", 20))
+MAX_TOTAL_WORKERS: int = int(os.environ.get("MAX_TOTAL_WORKERS", 100))
+
+# Per-Worker Resource Limits
+WORKER_CPU: float = float(os.environ.get("WORKER_CPU", 1.0))  # CPU cores
+WORKER_RAM_MB: int = int(os.environ.get("WORKER_RAM_MB", 1024))  # Memory in MB
+WORKER_MAX_DISK_SIZE_MB: int = int(os.environ.get("WORKER_MAX_DISK_SIZE_MB", 500))  # Virtual disk size in MB
+
+# --- Timeout Configuration ---
+WORKER_IDLE_TIMEOUT: int = int(os.environ.get("WORKER_IDLE_TIMEOUT", 3600))  # 1 hour
+RECYCLING_INTERVAL: int = int(os.environ.get("RECYCLING_INTERVAL", 300))  # 5 minutes
+MAX_EXECUTION_TIMEOUT: float = float(os.environ.get("MAX_EXECUTION_TIMEOUT", 15.0))  # 15 secs
+
+# --- File Operation Limits ---
+MAX_FILE_SIZE_MB: int = int(os.environ.get("MAX_FILE_SIZE_MB", 100))  # 100MB default
+
+# --- Security ---
+# SSRF protection: block requests to internal/private networks by default
+SSRF_PROTECTION_ENABLED: bool = os.environ.get('SSRF_PROTECTION_ENABLED', 'true').lower() == 'true'
+
+# CORS allowed origins (comma-separated list, or "*" for development only)
+_cors_origins_str: str = os.environ.get('CORS_ALLOWED_ORIGINS', '*')
+CORS_ALLOWED_ORIGINS: list[str] = (
+    ['*'] if _cors_origins_str == '*'
+    else [origin.strip() for origin in _cors_origins_str.split(',') if origin.strip()]
+)
