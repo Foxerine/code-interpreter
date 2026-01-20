@@ -2,6 +2,7 @@
 /execute endpoint.
 """
 import aiohttp
+import orjson
 from loguru import logger as l
 
 from gateway import meta_config
@@ -25,6 +26,16 @@ async def execute(request: ExecuteRequest, worker: WorkerDep) -> ExecuteResponse
                     result_text=result.data.result_text,
                     result_base64=result.data.result_base64,
                 )
+            case 400:
+                # Python execution error - return the error message as result_text
+                # Worker is still healthy, no need to release
+                l.debug(f"Worker {worker.container_name} returned Python error: {result.text}")
+                try:
+                    error_data = orjson.loads(result.text)
+                    error_message = error_data.get("detail", result.text)
+                except orjson.JSONDecodeError:
+                    error_message = result.text
+                return ExecuteResponse(result_text=error_message)
             case 503:
                 l.warning(f"Worker {worker.container_name} returned 503, releasing worker")
                 await worker.release()

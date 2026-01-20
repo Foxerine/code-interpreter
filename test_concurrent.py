@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 # --- ⚙️ 测试配置 ---
 
 # 网关地址
-GATEWAY_URL = "http://127.0.0.1:3874"
+GATEWAY_URL = "http://127.0.0.1:3874/api/v1"
 # 并发用户数 (同时模拟多少个用户)
 NUM_CONCURRENT_USERS = 25
 # 每个用户的请求总数 (必须大于等于3，以完整执行一个场景)
@@ -117,7 +117,7 @@ async def simulate_user_session(client: httpx.AsyncClient, results: list):
     try:
         for i in range(REQUESTS_PER_USER):
             code, expected_answer, session_state = generate_code_for_step(scenario, i, session_state)
-            payload = {"user_uuid": user_id, "code": code}
+            payload = {"code": code}
 
             start_time = time.monotonic()
             error_detail = None
@@ -125,7 +125,11 @@ async def simulate_user_session(client: httpx.AsyncClient, results: list):
 
             try:
                 response = await client.post(
-                    f"{GATEWAY_URL}/execute", json=payload, headers=HEADERS, timeout=REQUEST_TIMEOUT
+                    f"{GATEWAY_URL}/execute",
+                    params={"user_uuid": user_id},
+                    json=payload,
+                    headers=HEADERS,
+                    timeout=REQUEST_TIMEOUT
                 )
                 latency = time.monotonic() - start_time
 
@@ -169,7 +173,10 @@ async def simulate_user_session(client: httpx.AsyncClient, results: list):
     finally:
         try:
             await client.post(
-                f"{GATEWAY_URL}/release", json={"user_uuid": user_id}, headers=HEADERS, timeout=10.0
+                f"{GATEWAY_URL}/release",
+                params={"user_uuid": user_id},
+                headers=HEADERS,
+                timeout=10.0
             )
         except httpx.RequestError:
             pass

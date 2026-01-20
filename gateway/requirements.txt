@@ -5,4 +5,5 @@ aiohttp
 pydantic
 aiodocker
 aiofiles
+orjson
 ssrf-protect @ git+https://github.com/kobotoolbox/ssrf-protect.git

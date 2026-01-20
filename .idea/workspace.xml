@@ -5,30 +5,22 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="d45bd3cc-2f29-47de-b05d-1e3672cb76fe" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/code-interpreter-all.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/AGENTS.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/code_interpreter/Dockerfile" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/code_interpreter/app/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/code_interpreter/app/dto.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/code_interpreter/app/kernel_manager.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/code_interpreter/app/main.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/code_interpreter/assets/simhei.ttf" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/code_interpreter/supervisor/superviosr.conf" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docker-compose.yml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/interpreter_manager.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/settings.local.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gateway/fastapis/api/v1/execute/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/gateway/fastapis/api/v1/execute/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gateway/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/gateway/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/images/1_test_summary_pie_chart.png" beforeDir="false" afterPath="$PROJECT_DIR$/images/1_test_summary_pie_chart.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/images/3_failure_analysis_bar_chart.png" beforeDir="false" afterPath="$PROJECT_DIR$/images/3_failure_analysis_bar_chart.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test_concurrent.py" beforeDir="false" afterPath="$PROJECT_DIR$/test_concurrent.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="CopilotPersistence">
+    <persistenceIdMap>
+      <entry key="_C:/Users/Administrator/PycharmProjects/code-interpreter" value="33M86FAKQz9DhBsN5Iadi2ORhIm" />
+    </persistenceIdMap>
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -42,9 +34,9 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 7
-}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 7
+}</component>
   <component name="ProjectId" id="33M86FAKQz9DhBsN5Iadi2ORhIm" />
   <component name="ProjectLevelVcsManager">
     <ConfirmationsSetting value="2" id="Add" />
@@ -62,7 +54,7 @@
     "RunOnceActivity.git.unshallow": "true",
     "git-widget-placeholder": "master",
     "ignore.virus.scanning.warn.message": "true",
-    "last_opened_file_path": "C:/Users/Administrator/PycharmProjects/code-interpreter-all/assets",
+    "last_opened_file_path": "C:/Users/Administrator/PycharmProjects/code-interpreter",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -113,10 +105,19 @@
       <option name="presentableId" value="Default" />
       <updated>1759115403205</updated>
       <workItem from="1759115404228" duration="8126000" />
+      <workItem from="1768881357168" duration="4320000" />
     </task>
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="github-copilot-workspace">
+    <instructionFileLocations>
+      <option value=".github/instructions" />
+    </instructionFileLocations>
+    <promptFileLocations>
+      <option value=".github/prompts" />
+    </promptFileLocations>
   </component>
 </project>
