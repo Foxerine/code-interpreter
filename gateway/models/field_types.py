@@ -38,12 +38,18 @@ SandboxPathStr: TypeAlias = Annotated[
     Field(
         min_length=1,
         max_length=1024,
-        pattern=r'^/sandbox(/[\w\-\.]+)*/?$'
+        # Pattern breakdown:
+        # ^/sandbox - must start with /sandbox
+        # (/[\w\-]+(\.[\w\-]+)*)* - path segments: alphanumeric with optional .extension
+        # /?$ - optional trailing slash
+        # This prevents '..' by not allowing consecutive dots or dots at segment boundaries
+        pattern=r'^/sandbox(/[\w\-]+(\.[\w\-]+)*)*/?$'
     )
 ]
 """
 Path within sandbox directory.
-Must start with /sandbox and contain only alphanumeric, dash, underscore, dot.
+Must start with /sandbox, path segments contain alphanumeric/dash/underscore,
+with optional file extensions (e.g., .txt). Prevents path traversal (.. is blocked).
 """
 
 SandboxFileName: TypeAlias = Annotated[
