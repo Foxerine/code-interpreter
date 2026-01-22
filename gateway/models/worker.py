@@ -1,36 +1,40 @@
 """
 Worker and WorkerPool rich domain models.
+
+Worker composes VirtualDisk and SandboxFileSystem following the composition
+pattern. VirtualDisk.destroy() is the single source of truth for cleanup.
 """
 import asyncio
 import os as sync_os
 import time
-from asyncio.subprocess import Process
-from enum import StrEnum
-from typing import ClassVar
-from uuid import UUID
 import uuid as uuid_mod
+from collections.abc import Coroutine
+from enum import StrEnum
+from typing import Any, ClassVar
+from uuid import UUID
 
 import aiohttp
-from aiodocker.containers import DockerContainer
 from aiodocker.docker import Docker
 from aiodocker.exceptions import DockerError
 from aiofiles import os as async_os
 from loguru import logger as l
-from pydantic import Field, PrivateAttr
+from pydantic import Field, ValidationError
 
 from gateway import meta_config
 from gateway.utils.aiohttp_client_session_mixin import AioHttpClientSessionClassVarMixin
+
 from .base import ModelBase
 from .exceptions import WorkerPoolShuttingDownError, WorkerProvisionError
-from .field_types import Str64, Str128, Str256
+from .field_types import Str128, Str256
 from .files import (
     FileExportItem,
     FileExportResultItem,
-    FileRef,
     FileUploadItem,
     FileUploadResultItem,
-    SandboxFile,
 )
+from .sandbox_filesystem import SandboxFileSystem
+from .virtual_disk import VirtualDisk
+from gateway.utils.subprocess import run_cmd
 
 
 class WorkerStatus(StrEnum):
@@ -58,66 +62,73 @@ class Worker(ModelBase, AioHttpClientSessionClassVarMixin):
     Rich domain model for a Worker container.
 
     Worker knows how to manage its own lifecycle including health checks,
-    binding to users, and self-destruction.
+    binding to users, and self-destruction. Composes VirtualDisk for disk
+    lifecycle and delegates file operations to SandboxFileSystem.
 
     Inherits AioHttpClientSessionClassVarMixin for shared HTTP session.
     """
-    # Reusable timeout for health checks
-    _HEALTH_CHECK_TIMEOUT: ClassVar[aiohttp.ClientTimeout] = aiohttp.ClientTimeout(total=2.0)
+    # Constants
+    HEALTH_CHECK_TIMEOUT: aiohttp.ClientTimeout = aiohttp.ClientTimeout(total=2.0)
+    HEALTH_CHECK_INTERVAL: float = 0.5
 
     container_id: Str128
     container_name: Str128
     internal_url: Str256
     status: WorkerStatus = WorkerStatus.CREATING
-    loop_device: Str64
-    """Loop device path (e.g., /dev/loop10)"""
+    vdisk: VirtualDisk
+    """Virtual disk resource (composition pattern)."""
     user_uuid: UUID | None = None
     last_active_timestamp: float = Field(default_factory=time.time)
+
+    model_config = {'arbitrary_types_allowed': True}
+
+    @property
+    def loop_device(self) -> str | None:
+        """Loop device path (delegates to vdisk)."""
+        return self.vdisk.loop_device
+
+    @property
+    def mount_point(self) -> str | None:
+        """Gateway-side mount point (delegates to vdisk)."""
+        return self.vdisk.host_mount_point
 
     async def health_check(self, timeout: int = 30) -> bool:
         """Performs health check on this worker."""
         start_time = time.time()
         while time.time() - start_time < timeout:
             try:
-                # TODO: Move sleep interval (0.5) to meta_config
                 async with self.http_session.get(
                     f"{self.internal_url}/api/v1/kernel/health",
-                    timeout=self._HEALTH_CHECK_TIMEOUT,
+                    timeout=self.HEALTH_CHECK_TIMEOUT,
                 ) as response:
                     if response.status == 200:
                         l.debug(f"Worker {self.container_name} passed health check.")
                         return True
             except aiohttp.ClientError:
                 pass
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(self.HEALTH_CHECK_INTERVAL)
         l.error(f"Worker {self.container_name} failed health check after {timeout}s.")
         return False
 
     async def destroy(self, docker: Docker) -> None:
-        """Destroys this worker container and its resources."""
-        l.warning(f"Destroying worker: {self.container_name}")
-        vdisk_path = sync_os.path.join(WorkerPool.VDISKS_BASE_DIR, f"{self.container_name}.img")
+        """
+        Destroys this worker container and its resources.
 
+        Delegates disk cleanup to vdisk.destroy() (single source of truth).
+        Order: unmount → delete container → detach loop → remove disk file.
+        """
+        l.warning(f"Destroying worker: {self.container_name}")
+
+        # 1. Destroy virtual disk (unmount + detach loop + remove file)
+        await self.vdisk.destroy()
+
+        # 2. Delete container
         try:
             container = docker.containers.container(self.container_id)
             await container.delete(force=True)
         except DockerError as e:
             if e.status != 404:
                 l.error(f"Error deleting container {self.container_name}: {e}")
-        finally:
-            if self.loop_device and self.loop_device.strip():
-                try:
-                    l.info(f"Detaching loop device {self.loop_device} for {self.container_name}")
-                    await WorkerPool._run_subprocess(["losetup", "-d", self.loop_device])
-                except Exception as e:
-                    l.error(f"Error detaching loop device for {self.container_name}: {e}")
-
-            try:
-                if await async_os.path.exists(vdisk_path):
-                    await async_os.remove(vdisk_path)
-                    l.info(f"Successfully destroyed virtual disk: {vdisk_path}")
-            except Exception as e:
-                l.error(f"Error during virtual disk cleanup for {self.container_name}: {e}")
 
     def bind_to_user(self, user_uuid: UUID) -> None:
         """Binds this worker to a user."""
@@ -137,10 +148,14 @@ class Worker(ModelBase, AioHttpClientSessionClassVarMixin):
         """Checks if this worker has been idle too long."""
         return time.time() - self.last_active_timestamp > timeout
 
-    @property
-    def container(self) -> DockerContainer:
-        """Gets the Docker container for this worker."""
-        return WorkerPool.docker.containers.container(self.container_id)
+    def _get_sandbox_fs(self) -> SandboxFileSystem:
+        """Create a SandboxFileSystem instance for file operations."""
+        if not self.mount_point:
+            raise RuntimeError(f"Worker {self.container_name} has no mount point")
+        return SandboxFileSystem(
+            mount_point=self.mount_point,
+            file_op_semaphore=WorkerPool.get_file_op_semaphore(),
+        )
 
     async def execute(self, code: str, timeout: float) -> WorkerExecuteResult:
         """Executes code in this worker and returns the result."""
@@ -157,11 +172,12 @@ class Worker(ModelBase, AioHttpClientSessionClassVarMixin):
 
             data = None
             if response.status == 200:
-                json_data = await response.json()
-                data = WorkerExecuteResultData(
-                    result_text=json_data["result_text"],
-                    result_base64=json_data["result_base64"],
-                )
+                try:
+                    json_data = await response.json()
+                    # Let Pydantic handle field validation
+                    data = WorkerExecuteResultData(**json_data)
+                except (aiohttp.ContentTypeError, ValueError, ValidationError) as e:
+                    l.error(f"Worker {self.container_name} returned invalid response: {e}")
 
             return WorkerExecuteResult(
                 status_code=response.status,
@@ -170,45 +186,24 @@ class Worker(ModelBase, AioHttpClientSessionClassVarMixin):
             )
 
     async def upload_files(self, files: list[FileUploadItem], max_size_bytes: int) -> list[FileUploadResultItem]:
-        """Uploads files to this worker's sandbox."""
+        """
+        Uploads files to worker sandbox via Gateway dual-mount (zero-copy).
 
-        async def upload_one(file_item: FileUploadItem) -> FileUploadResultItem:
-            sandbox_file = await SandboxFile.from_url(
-                directory=file_item.path,
-                filename=file_item.name,
-                download_url=str(file_item.download_url),
-                max_size_bytes=max_size_bytes,
-            )
-            result = await sandbox_file.write_to_container(self.container)
-            return FileUploadResultItem(full_path=result['full_path'], size=result['size'])
-
-        return list(await asyncio.gather(*[upload_one(f) for f in files]))
+        Delegates to SandboxFileSystem for actual file operations.
+        """
+        l.debug(f"Uploading {len(files)} file(s) to worker {self.container_name}")
+        self.touch()
+        return await self._get_sandbox_fs().upload_files(files, max_size_bytes)
 
     async def export_files(self, files: list[FileExportItem]) -> list[FileExportResultItem]:
-        """Exports files from this worker's sandbox."""
+        """
+        Exports files from worker sandbox to OSS via Gateway dual-mount (zero-copy).
 
-        async def export_one(file_item: FileExportItem) -> FileExportResultItem:
-            sandbox_file = await SandboxFile.read_from_container(
-                container=self.container,
-                directory=file_item.path,
-                filename=file_item.name,
-            )
-            await sandbox_file.upload_to_url(str(file_item.upload_url))
-            return FileExportResultItem(path=file_item.path, name=file_item.name, size=sandbox_file.size)
-
-        return list(await asyncio.gather(*[export_one(f) for f in files]))
-
-    async def delete_files(self, files: list[FileRef]) -> None:
-        """Deletes files from this worker's sandbox."""
-
-        async def delete_one(file_ref: FileRef) -> None:
-            await SandboxFile.delete_from_container(
-                container=self.container,
-                directory=file_ref.path,
-                filename=file_ref.name,
-            )
-
-        await asyncio.gather(*[delete_one(f) for f in files])
+        Delegates to SandboxFileSystem for actual file operations.
+        """
+        l.debug(f"Exporting {len(files)} file(s) from worker {self.container_name}")
+        self.touch()
+        return await self._get_sandbox_fs().export_files(files)
 
 
 class WorkerPool:
@@ -236,6 +231,8 @@ class WorkerPool:
     MAX_CREATION_RETRIES: ClassVar[int] = 3
     CREATION_RETRY_DELAY: ClassVar[float] = 1.0
     VDISKS_BASE_DIR: ClassVar[str] = "/virtual_disks"
+    WORKER_MOUNTS_DIR: ClassVar[str] = "/worker_mounts"
+    """Gateway-side directory for mounting Worker sandbox filesystems"""
 
     # State
     _docker: ClassVar[Docker | None] = None
@@ -244,6 +241,8 @@ class WorkerPool:
     _idle_worker_ids: ClassVar[set[str]] = set()
     _state_lock: ClassVar[asyncio.Lock | None] = None
     _creation_semaphore: ClassVar[asyncio.Semaphore | None] = None
+    _file_op_semaphore: ClassVar[asyncio.Semaphore | None] = None
+    """Shared semaphore for file upload/export operations across all workers"""
     _is_initializing: ClassVar[bool] = True
     _is_replenishing: ClassVar[bool] = False
     _shutdown_event: ClassVar[asyncio.Event | None] = None
@@ -252,22 +251,31 @@ class WorkerPool:
     def __new__(cls, *args, **kwargs) -> "WorkerPool":
         raise RuntimeError(f"{cls.__name__} is a pure classmethod singleton, cannot be instantiated")
 
-    @classmethod
-    async def _run_subprocess(cls, cmd: list[str]) -> tuple[bytes, bytes]:
-        """Runs a shell command asynchronously."""
-        process: Process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        stdout, stderr = await process.communicate()
+    @staticmethod
+    def _task_done_callback(task: asyncio.Task[Any]) -> None:
+        """Callback to log exceptions from background tasks."""
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            l.error(f"Background task '{task.get_name()}' failed: {type(exc).__name__}")
 
-        if process.returncode != 0:
-            raise RuntimeError(
-                f"Subprocess command '{' '.join(cmd)}' failed with exit code {process.returncode}.\n"
-                f"Stderr: {stderr.decode(errors='ignore')}"
-            )
-        return stdout, stderr
+    @classmethod
+    def _create_background_task(
+        cls,
+        coro: Coroutine[Any, Any, Any],
+        name: str,
+    ) -> asyncio.Task[Any]:
+        """Creates a background task with exception logging."""
+        task = asyncio.create_task(coro, name=name)
+        task.add_done_callback(cls._task_done_callback)
+        return task
+
+    @classmethod
+    def get_file_op_semaphore(cls) -> asyncio.Semaphore:
+        """Returns the shared file operation semaphore."""
+        assert cls._file_op_semaphore is not None, "WorkerPool not initialized"
+        return cls._file_op_semaphore
 
     @classmethod
     async def init(cls) -> None:
@@ -289,11 +297,13 @@ class WorkerPool:
         cls._idle_worker_ids = set()
         cls._state_lock = asyncio.Lock()
         cls._creation_semaphore = asyncio.Semaphore(cls.MAX_TOTAL_WORKERS)
+        cls._file_op_semaphore = asyncio.Semaphore(cls.MAX_TOTAL_WORKERS * 3)
         cls._shutdown_event = asyncio.Event()
         cls._shutdown_event.clear()
 
         l.info("Initializing worker pool...")
         await async_os.makedirs(cls.VDISKS_BASE_DIR, exist_ok=True)
+        await async_os.makedirs(cls.WORKER_MOUNTS_DIR, exist_ok=True)
 
         try:
             gateway_container = await cls._docker.containers.get(sync_os.environ['HOSTNAME'])
@@ -335,52 +345,62 @@ class WorkerPool:
 
     @classmethod
     async def _cleanup_stale_workers(cls) -> None:
-        """Removes stale containers and disk files from previous runs."""
+        """Removes stale containers, disk files, and mount points from previous runs."""
         l.info("Cleaning up stale resources...")
         try:
+            # 1. Clean up stale containers
             old_containers = await cls._docker.containers.list(filters={"label": ["managed-by=code-interpreter-gateway"]})
             if old_containers:
                 l.warning(f"Found {len(old_containers)} stale worker containers. Cleaning up...")
                 cleanup_tasks = [c.delete(force=True) for c in old_containers]
                 await asyncio.gather(*cleanup_tasks, return_exceptions=True)
 
-            if await async_os.path.exists(cls.VDISKS_BASE_DIR):
-                for filename in await async_os.listdir(cls.VDISKS_BASE_DIR):
-                    if filename.endswith(".img"):
-                        l.warning(f"Found stale virtual disk file: {filename}. Cleaning up...")
-                        await async_os.remove(sync_os.path.join(cls.VDISKS_BASE_DIR, filename))
+            # 2. Clean up stale virtual disk resources (mount points, loop devices, disk files)
+            # Delegates to VirtualDisk.cleanup_stale() which fixes the loop device leak issue
+            await VirtualDisk.cleanup_stale(cls.VDISKS_BASE_DIR, cls.WORKER_MOUNTS_DIR)
         except DockerError as e:
             l.error(f"Error during stale resource cleanup: {e}")
 
+    # Timeout for acquiring worker creation semaphore
+    SEMAPHORE_ACQUIRE_TIMEOUT: ClassVar[float] = 60.0
+
     @classmethod
     async def _create_worker(cls, retry_count: int = 0) -> Worker:
-        """Creates a new worker container with virtual disk."""
+        """
+        Creates a new worker container with virtual disk.
+
+        Uses VirtualDisk for disk lifecycle management.
+        On failure, cleanup is handled by vdisk.destroy() (single source of truth).
+        """
         if cls._shutdown_event and cls._shutdown_event.is_set():
             raise RuntimeError("WorkerPool is shutting down")
 
-        await cls._creation_semaphore.acquire()
+        try:
+            await asyncio.wait_for(
+                cls._creation_semaphore.acquire(),
+                timeout=cls.SEMAPHORE_ACQUIRE_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            l.error(f"Timed out waiting to acquire worker creation semaphore after {cls.SEMAPHORE_ACQUIRE_TIMEOUT}s")
+            raise RuntimeError("Worker pool is at capacity, try again later")
 
         container_name = f"code-worker-{uuid_mod.uuid4().hex[:12]}"
-        vdisk_container_path = sync_os.path.join(cls.VDISKS_BASE_DIR, f"{container_name}.img")
+
+        # Create VirtualDisk instance (rich domain model)
+        vdisk = VirtualDisk(
+            container_name=container_name,
+            vdisks_base_dir=cls.VDISKS_BASE_DIR,
+            worker_mounts_dir=cls.WORKER_MOUNTS_DIR,
+            size_mb=cls.WORKER_MAX_DISK_SIZE_MB,
+        )
 
         container = None
-        loop_device = None
 
         try:
-            l.info(f"Creating virtual disk: {vdisk_container_path}")
-            await cls._run_subprocess(
-                ["truncate", "-s", f"{cls.WORKER_MAX_DISK_SIZE_MB}M", vdisk_container_path]
-            )
-
-            l.info(f"Associating {vdisk_container_path} with a loop device...")
-            stdout, _ = await cls._run_subprocess(["losetup", "--find", "--show", vdisk_container_path])
-            loop_device = stdout.decode().strip()
-            if not loop_device or not loop_device.startswith("/dev/loop"):
-                raise RuntimeError(f"Invalid loop device path returned: {loop_device!r}")
-            l.success(f"Associated disk for {container_name} with {loop_device}")
-
-            l.info(f"Formatting loop device {loop_device}...")
-            await cls._run_subprocess(["mkfs.ext4", "-F", loop_device])
+            # Virtual disk lifecycle: create → attach → format → mount
+            await vdisk.create()
+            loop_device = await vdisk.attach_loop()
+            await vdisk.format()
 
             l.info(f"Creating worker container: {container_name}")
             device_mapping = [{"PathOnHost": loop_device, "PathInContainer": "/dev/vdisk", "CgroupPermissions": "rwm"}]
@@ -393,6 +413,11 @@ class WorkerPool:
                     'NetworkMode': cls.INTERNAL_NETWORK_NAME,
                     'Memory': cls.WORKER_RAM_MB * 1024 * 1024,
                     'NanoCpus': int(cls.WORKER_CPU * 1_000_000_000),
+                    # SECURITY DESIGN: Elevated capabilities required for sandbox functionality:
+                    # - SYS_ADMIN: Required for mounting virtual disk inside container
+                    # - NET_ADMIN/NET_RAW: Required for network namespace isolation
+                    # - apparmor:unconfined: Required because custom AppArmor profile not yet implemented
+                    # Mitigations: ReadonlyRootfs, isolated network, resource limits, virtual disk quota
                     'CapAdd': ['SYS_ADMIN', 'NET_ADMIN', 'NET_RAW'],
                     'SecurityOpt': ["apparmor:unconfined"],
                     'Devices': device_mapping,
@@ -408,14 +433,28 @@ class WorkerPool:
                 container_name=container_name,
                 internal_url=f"http://{container_name}:8000",
                 status=WorkerStatus.IDLE,
-                loop_device=loop_device,
+                vdisk=vdisk,
             )
 
             if not await worker.health_check():
                 raise RuntimeError("Worker failed health check after creation.")
 
-            l.success(f"Worker {container_name} created and healthy.")
+            # Mount to Gateway for direct sandbox access
+            await vdisk.mount_to_host()
+
+            l.success(f"Worker {container_name} created, healthy and mounted.")
             return worker
+
+        except asyncio.CancelledError:
+            l.warning(f"Worker creation cancelled for {container_name}, cleaning up resources...")
+            if container:
+                try:
+                    await container.delete(force=True)
+                except Exception as ex:
+                    l.error(f"Rollback (container): {ex}")
+            await vdisk.destroy()  # Single source of truth for cleanup
+            cls._creation_semaphore.release()
+            raise
 
         except Exception as e:
             l.error(f"Failed to create worker {container_name} on attempt {retry_count + 1}: {e}")
@@ -424,17 +463,7 @@ class WorkerPool:
                     await container.delete(force=True)
                 except Exception as ex:
                     l.error(f"Rollback (container): {ex}")
-            if loop_device:
-                try:
-                    await cls._run_subprocess(["losetup", "-d", loop_device])
-                except Exception as ex:
-                    l.debug(f"Rollback (losetup): {ex}")
-            if await async_os.path.exists(vdisk_container_path):
-                try:
-                    await async_os.remove(vdisk_container_path)
-                except Exception as ex:
-                    l.error(f"Rollback (vdisk file): {ex}")
-
+            await vdisk.destroy()  # Single source of truth for cleanup
             cls._creation_semaphore.release()
 
             if retry_count < cls.MAX_CREATION_RETRIES:
@@ -456,7 +485,7 @@ class WorkerPool:
         if cls._shutdown_event and cls._shutdown_event.is_set():
             raise WorkerPoolShuttingDownError()
 
-        asyncio.create_task(cls._replenish_idle_pool())
+        cls._create_background_task(cls._replenish_idle_pool(), "replenish_idle_pool")
 
         async with cls._state_lock:
             if user_uuid in cls._user_to_worker_map:
@@ -503,7 +532,7 @@ class WorkerPool:
         if worker_to_destroy:
             l.info(f"Releasing worker {worker_to_destroy.container_name} from user {user_uuid}")
             await cls._destroy_worker(worker_to_destroy)
-            asyncio.create_task(cls._replenish_idle_pool())
+            cls._create_background_task(cls._replenish_idle_pool(), "replenish_idle_pool")
         else:
             l.warning(f"No active worker found for user {user_uuid} during release request.")
 
@@ -518,7 +547,7 @@ class WorkerPool:
 
         l.info(f"Releasing worker {worker.container_name}")
         await cls._destroy_worker(worker)
-        asyncio.create_task(cls._replenish_idle_pool())
+        cls._create_background_task(cls._replenish_idle_pool(), "replenish_idle_pool")
 
     @classmethod
     async def _replenish_idle_pool(cls) -> None:
@@ -546,6 +575,9 @@ class WorkerPool:
                         cls._idle_worker_ids.add(worker.container_id)
                     else:
                         l.error(f"Failed to create worker during replenishment: {worker}")
+        except asyncio.CancelledError:
+            l.debug("Replenish pool task cancelled")
+            raise
         finally:
             async with cls._state_lock:
                 cls._is_replenishing = False
@@ -586,7 +618,7 @@ class WorkerPool:
                 if workers_to_destroy:
                     destroy_tasks = [cls._destroy_worker(w) for w in workers_to_destroy]
                     await asyncio.gather(*destroy_tasks, return_exceptions=True)
-                    asyncio.create_task(cls._replenish_idle_pool())
+                    cls._create_background_task(cls._replenish_idle_pool(), "replenish_idle_pool")
 
             except asyncio.CancelledError:
                 l.info("Idle worker recycling task cancelled.")
@@ -595,22 +627,22 @@ class WorkerPool:
                 l.error(f"Error in recycle_timed_out_workers: {e}")
 
     @classmethod
-    @property
-    def workers(cls) -> dict[str, Worker]:
-        return cls._workers
+    def get_workers(cls) -> dict[str, Worker]:
+        """Returns a shallow copy of the current workers dict (thread-safe snapshot)."""
+        return cls._workers.copy()
 
     @classmethod
-    @property
-    def user_to_worker_map(cls) -> dict[UUID, str]:
-        return cls._user_to_worker_map
+    def get_user_to_worker_map(cls) -> dict[UUID, str]:
+        """Returns a shallow copy of the user-to-worker mapping (thread-safe snapshot)."""
+        return cls._user_to_worker_map.copy()
 
     @classmethod
-    @property
-    def is_initializing(cls) -> bool:
+    def get_is_initializing(cls) -> bool:
+        """Returns whether the pool is still initializing."""
         return cls._is_initializing
 
     @classmethod
-    @property
-    def docker(cls) -> Docker:
-        assert cls._docker is not None
+    def get_docker(cls) -> Docker:
+        """Returns the Docker client instance."""
+        assert cls._docker is not None, "WorkerPool not initialized"
         return cls._docker

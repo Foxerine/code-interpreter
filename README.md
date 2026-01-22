@@ -48,6 +48,51 @@ Stress-tested on a mid-range desktop to validate its performance and scalability
 
 ![High-Level System Architecture](images/high_level_architecture_en.png)![Request Flow Sequence Diagram](images/request_flow_sequence_en.png)
 
+## File Transfer Architecture
+
+The system provides secure, high-performance file transfer capabilities via the Gateway's **dual-mount architecture**. This design allows the Gateway to directly access each worker's sandboxed filesystem without routing traffic through the untrusted worker container.
+
+### How It Works
+
+```
+                                    ┌─────────────────────────────────────┐
+                                    │         Worker Container            │
+   ┌──────────┐                     │  ┌───────────────────────────────┐  │
+   │  Client  │ ─── presigned URL ──│──│ /sandbox (bind mount inside)  │  │
+   │  (OSS)   │                     │  │   └── user_data.xlsx          │  │
+   └──────────┘                     │  │   └── output.png              │  │
+        │                           │  └───────────────────────────────┘  │
+        │                           └─────────────────────────────────────┘
+        │                                              │
+        │                                              │ (same block device)
+        │                                              ▼
+        │                           ┌─────────────────────────────────────┐
+        │  HTTP PUT/GET             │        Gateway Container            │
+        └────────────────────────── │  ┌───────────────────────────────┐  │
+                                    │  │ /worker_mounts/{worker_id}/   │  │
+                                    │  │   └── user_data.xlsx          │  │
+                                    │  │   └── output.png              │  │
+                                    │  └───────────────────────────────┘  │
+                                    │         (host mount point)          │
+                                    └─────────────────────────────────────┘
+```
+
+1.  **Upload**: The Gateway downloads files from presigned URLs (e.g., OSS) and writes them directly to the worker's virtual disk via its own mount point (`/worker_mounts/{worker_id}/`).
+2.  **Export**: The Gateway reads files from its mount point and uploads them to the presigned URL. Data never passes through the untrusted worker process.
+3.  **Delete**: The Gateway directly removes files from the filesystem.
+
+### Security Features
+
+| Feature | Implementation | Threat Mitigated |
+| :--- | :--- | :--- |
+| **Path Traversal Prevention** | Uses `PurePosixPath.relative_to()` to validate that all paths resolve within `/sandbox`. Rejects filenames containing `/` or `\`. | Directory traversal attacks (e.g., `../../../etc/passwd`) |
+| **SSRF Protection** | Integrates `ssrf-protect` library to validate download URLs. Blocks requests to private IP ranges (10.x, 172.16.x, 192.168.x, 127.x) and internal hostnames. | Server-Side Request Forgery |
+| **Redirect Bypass Prevention** | Disables HTTP redirects (`allow_redirects=False`) during file downloads. | SSRF bypass via malicious redirects to internal services |
+| **Atomic Writes** | Uploads use temp file + rename pattern to prevent partial/corrupted files on failure. | Data corruption from interrupted transfers |
+| **File Size Limits** | Enforces per-file size limit (default 100MB) with streaming validation. Aborts transfer immediately upon exceeding limit. | Disk exhaustion attacks |
+| **Symlink Attack Prevention** | Mounts virtual disk with `nosymfollow` option (Linux 5.10+). Verifies mount point is not a symlink before mounting. | Symlink-based sandbox escapes |
+| **Concurrency Control** | Uses semaphore to limit concurrent file operations, preventing resource exhaustion. | DoS via concurrent transfer floods |
+
 ## Quick Start
 
 ### 1. Prerequisites

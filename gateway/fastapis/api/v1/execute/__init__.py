@@ -16,6 +16,24 @@ router = TaggedAPIRouter(prefix="/execute", tag="Execute code")
 
 @router.post("", response_model=ExecuteResponse)
 async def execute(request: ExecuteRequest, worker: WorkerDep) -> ExecuteResponse:
+    """
+    Execute Python code in an isolated sandbox environment.
+
+    **Authentication**: Requires `user_uuid` query parameter to identify the session.
+    Each user gets a dedicated sandbox with persistent state between executions.
+
+    **Request Body**:
+    - `code`: Python code string to execute
+
+    **Response** (200 OK):
+    - `result_text`: Text output from code execution (stdout, print statements)
+    - `result_base64`: Base64-encoded image output (e.g., matplotlib plots)
+
+    **Error Responses**:
+    - 503 Service Unavailable: Execution timeout or crashed environment (auto-reset)
+    - 504 Gateway Timeout: Failed to connect to execution worker (auto-reset)
+    - 500 Internal Server Error: Unexpected worker error
+    """
     l.debug(f"Execute request: {request}")
     try:
         result = await worker.execute(request.code, meta_config.MAX_EXECUTION_TIMEOUT)

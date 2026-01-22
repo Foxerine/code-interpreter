@@ -51,10 +51,13 @@ MAX_EXECUTION_TIMEOUT: float = float(os.environ.get("MAX_EXECUTION_TIMEOUT", 15.
 MAX_FILE_SIZE_MB: int = int(os.environ.get("MAX_FILE_SIZE_MB", 100))  # 100MB default
 
 # --- Security ---
-# SSRF protection: block requests to internal/private networks by default
+# SECURITY DESIGN: SSRF protection is configurable for environments where internal network
+# access is required (e.g., downloading from internal object storage). Default is enabled.
 SSRF_PROTECTION_ENABLED: bool = os.environ.get('SSRF_PROTECTION_ENABLED', 'true').lower() == 'true'
 
-# CORS allowed origins (comma-separated list, or "*" for development only)
+# SECURITY DESIGN: CORS default '*' is intentional for development/testing flexibility.
+# Production deployments should set CORS_ALLOWED_ORIGINS to explicit origin list.
+# Rate limiting is expected to be handled at infrastructure level (nginx, cloudflare, etc.).
 _cors_origins_str: str = os.environ.get('CORS_ALLOWED_ORIGINS', '*')
 CORS_ALLOWED_ORIGINS: list[str] = (
     ['*'] if _cors_origins_str == '*'

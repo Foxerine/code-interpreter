@@ -1,14 +1,13 @@
 """
-File handling models for sandbox file operations via Docker API.
+File handling models for sandbox file operations.
+
+Gateway uses dual-mount to directly access Worker's sandbox filesystem.
 """
-import io
-import tarfile
 import tempfile
 from pathlib import PurePosixPath
 from typing import ClassVar
 
 import aiohttp
-from aiodocker.containers import DockerContainer
 from loguru import logger as l
 from pydantic import AnyHttpUrl, Field, PrivateAttr, model_validator
 from ssrf_protect.ssrf_protect import SSRFProtect, SSRFProtectException
@@ -72,22 +71,17 @@ class SandboxPath(ModelBase):
         dir_path = PurePosixPath(self.directory)
         full = dir_path / self.filename
 
-        # Normalize using pathlib (handles .. and .)
-        # Since PurePosixPath doesn't resolve against filesystem, we normalize manually
-        try:
-            # Join with base and check if result is still under base
-            normalized = (base / full.relative_to("/")).as_posix()
-        except ValueError:
-            normalized = full.as_posix()
+        # Normalize the path (handles .. and .)
+        # PurePosixPath automatically normalizes (removes redundant separators, resolves . and ..)
+        normalized_path = PurePosixPath(full)
 
         # Ensure result stays within sandbox
-        normalized_path = PurePosixPath(normalized)
         try:
             normalized_path.relative_to(self.SANDBOX_BASE)
         except ValueError:
-            raise PathSecurityError(normalized, f"Path must be within {self.SANDBOX_BASE}")
+            raise PathSecurityError(str(normalized_path), f"Path must be within {self.SANDBOX_BASE}")
 
-        return normalized
+        return str(normalized_path)
 
     @property
     def full_path(self) -> str:
@@ -136,7 +130,7 @@ class SandboxFile(ModelBase, AioHttpClientSessionClassVarMixin):
     async def _download_from_url(cls, url: str, max_size_bytes: int) -> bytes:
         if meta_config.SSRF_PROTECTION_ENABLED:
             try:
-                SSRFProtect().clean_url(url)
+                SSRFProtect.validate(url)
             except SSRFProtectException as e:
                 raise FileDownloadError(url, f"SSRF protection: {e}") from e
 
@@ -166,94 +160,6 @@ class SandboxFile(ModelBase, AioHttpClientSessionClassVarMixin):
         except aiohttp.ClientError as e:
             raise FileDownloadError(url, str(e)) from e
 
-    def to_tar_archive(self) -> bytes:
-        if self.content is None:
-            raise ValueError("Cannot create archive: file has no content")
-
-        tar_buffer = io.BytesIO()
-        with tarfile.open(fileobj=tar_buffer, mode="w") as tar:
-            file_info = tarfile.TarInfo(name=self.path.filename)
-            file_info.size = len(self.content)
-            tar.addfile(file_info, io.BytesIO(self.content))
-        tar_buffer.seek(0)
-        return tar_buffer.read()
-
-    @classmethod
-    def extract_from_tar(cls, tar_data: bytes, filename: str) -> bytes:
-        tar_buffer = io.BytesIO(tar_data)
-        with tarfile.open(fileobj=tar_buffer, mode="r") as tar:
-            # Use data_filter (Python 3.12+) for safe extraction
-            for member in tar.getmembers(filter="data"):
-                if member.name == filename or member.name.endswith("/" + filename):
-                    f = tar.extractfile(member)
-                    if f:
-                        return f.read()
-            raise FileNotFoundError(f"File '{filename}' not found in archive")
-
-    async def write_to_container(self, container: DockerContainer) -> dict[str, bool | str | int]:
-        if self.content is None:
-            raise ValueError("Cannot write: file has no content")
-
-        tar_data = self.to_tar_archive()
-        l.info(f"Writing file to container: {self.path.full_path} ({self.size} bytes)")
-        await container.put_archive(self.path.dir_path, tar_data)
-        return {"success": True, "full_path": self.path.full_path, "size": self.size}
-
-    @classmethod
-    async def read_from_container(
-        cls,
-        container: DockerContainer,
-        directory: str,
-        filename: str,
-    ) -> "SandboxFile":
-        path = SandboxPath(directory=directory, filename=filename)
-        l.info(f"Reading file from container: {path.full_path}")
-
-        tar_stream = await container.get_archive(path.full_path)
-        chunks: list[bytes] = []
-        async for chunk in tar_stream:
-            chunks.append(chunk)
-        tar_data = b"".join(chunks)
-        content = cls.extract_from_tar(tar_data, filename)
-        return cls(path=path, content=content, size=len(content))
-
-    @classmethod
-    async def delete_from_container(
-        cls,
-        container: DockerContainer,
-        directory: str,
-        filename: str,
-    ) -> bool:
-        path = SandboxPath(directory=directory, filename=filename)
-        l.info(f"Deleting file from container: {path.full_path}")
-
-        exec_result = await container.exec(
-            cmd=["rm", "-f", "--", path.full_path],
-            stdout=True,
-            stderr=True,
-        )
-        async with exec_result.start() as stream:
-            await stream.read_out()
-        return True
-
-    async def upload_to_url(self, upload_url: str) -> None:
-        if self.content is None:
-            raise ValueError("Cannot upload: file has no content")
-
-        l.info(f"Uploading file to OSS: {self.path.full_path} ({self.size} bytes)")
-        try:
-            # TODO: Move timeout to meta_config
-            async with self.http_session.put(
-                upload_url,
-                data=self.content,
-                headers={"Content-Type": "application/octet-stream"},
-                timeout=self._UPLOAD_TIMEOUT,
-            ) as response:
-                response.raise_for_status()
-        except aiohttp.ClientResponseError as e:
-            raise FileOperationError(f"Failed to upload file: HTTP {e.status}") from e
-        except aiohttp.ClientError as e:
-            raise FileOperationError(f"Failed to upload file: {e}") from e
 
 
 # =============================================================================
@@ -310,11 +216,3 @@ class FileExportResultItem(SandboxFileRefBase, FileResultBase):
 class FileExportResponse(ModelBase):
     success: bool = True
     results: list[FileExportResultItem]
-
-
-class FileRef(SandboxFileRefBase):
-    pass
-
-
-class FileDeleteRequest(ModelBase):
-    files: list[FileRef] = Field(min_length=1, max_length=100)

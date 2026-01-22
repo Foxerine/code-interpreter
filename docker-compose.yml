@@ -11,13 +11,17 @@ services:
       # 映射 Gateway 对外端口，根据您的 Dockerfile，这里是 3874
       - "3874:3874"
     volumes:
-      # 将宿主机的 Docker socket 挂载到容器内，以便 Gateway 可以管理其他容器
+      # SECURITY DESIGN: Docker socket required for dynamic worker container management.
+      # Gateway creates/destroys worker containers on-demand. Consider docker-socket-proxy for production.
       - /var/run/docker.sock:/var/run/docker.sock
       # 挂载一个卷用于持久化 auth_token
       - gateway_data:/gateway/persistent_data
       # Allows Gateway to create .img files inside Docker-managed volumes
       - virtual_disks:/virtual_disks
       - /dev:/dev
+    # SECURITY DESIGN: Privileged mode required for loop device management (losetup, mount).
+    # Gateway creates virtual disks for each worker using loop devices. This is the core
+    # isolation mechanism - each worker gets its own filesystem with quota enforcement.
     privileged: true
     networks:
       # [新增] 连接到外部网络（默认桥接），以便 Gateway 自身可以访问互联网

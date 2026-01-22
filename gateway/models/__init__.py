@@ -32,13 +32,18 @@ from .files import (
     FileExportRequest,
     FileExportResultItem,
     FileExportResponse,
-    FileRef,
-    FileDeleteRequest,
     FileOperationError,
     PathSecurityError,
     FileTooLargeError,
     FileDownloadError,
 )
+from .virtual_disk import VirtualDisk
+from .sandbox_filesystem import SandboxFileSystem
 from .worker import Worker, WorkerExecuteResult, WorkerExecuteResultData, WorkerPool, WorkerStatus
 from .status import StatusResponse
-from .exceptions import WorkerPoolError, WorkerPoolShuttingDownError, WorkerProvisionError
+from .exceptions import (
+    WorkerPoolError,
+    WorkerPoolShuttingDownError,
+    WorkerProvisionError,
+    BatchFileOperationError,
+)
