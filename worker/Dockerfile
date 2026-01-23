@@ -11,8 +11,26 @@ ENV LANG=C.UTF-8 \
 
 # Install system dependencies
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends supervisor tini fontconfig libgl1-mesa-glx libglib2.0-0 curl iptables && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends \
+        supervisor tini fontconfig curl iptables \
+        # OpenCV dependencies
+        libgl1-mesa-glx libglib2.0-0 \
+        # pyzbar dependencies
+        libzbar0 \
+        # python-magic dependencies
+        libmagic1 \
+        # FFmpeg and multimedia dependencies
+        ffmpeg libavcodec-extra \
+        libsm6 libxext6 libxrender1 \
+        # Audio processing dependencies (librosa, soundfile)
+        libsndfile1 \
+        # CairoSVG dependencies
+        libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 \
+        # ImageMagick (for wand)
+        imagemagick libmagickwand-dev \
+        # RAW image processing (rawpy)
+        libraw-dev \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home -d /sandbox --shell /bin/bash sandbox && \
     chown -R sandbox:sandbox /sandbox

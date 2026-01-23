@@ -1,32 +1,160 @@
+# =============================================================================
+# Code Interpreter Worker - Python Dependencies
+# All versions pinned for security and reproducibility
+# Last updated: 2026-01-23
+# =============================================================================
+
 # --- Core Application ---
-fastapi
-uvicorn[standard]
-loguru
-aiohttp
-pydantic
-websockets
-aiofiles
+fastapi==0.115.12
+uvicorn[standard]==0.34.3
+loguru==0.7.3
+aiohttp==3.12.7
+pydantic==2.11.5
+websockets==15.0.1
+aiofiles==24.1.0
 
 # --- Jupyter Kernel Backend ---
 jupyter-kernel-gateway==3.0.1
-ipykernel
+ipykernel==6.29.5
 
-# --- Scientific Computing Libraries ---
-numpy
-pandas
-sympy
-scipy
-matplotlib
-scikit-learn
+# =============================================================================
+# USER-FACING LIBRARIES (for code execution)
+# =============================================================================
 
-# --- File Processing Libraries ---
-openpyxl>=3.1.2       # Excel (.xlsx)
-xlrd>=2.0.1           # Excel (.xls)
-beautifulsoup4>=4.12  # HTML parsing
-lxml>=5.0.0           # XML/HTML acceleration
-html5lib              # HTML5 parser
-python-docx>=1.0.0    # Word (.docx)
-PyPDF2>=3.0.0         # PDF processing
-python-pptx>=0.6.21   # PowerPoint (.pptx)
-pillow>=10.0.0        # Image processing
-tabulate>=0.9.0       # Table formatting
+# --- Scientific Computing ---
+numpy==2.2.6
+pandas==2.2.3
+sympy==1.13.3
+scipy==1.15.3
+matplotlib==3.10.3
+scikit-learn==1.6.1
+statsmodels==0.14.4           # Statistical modeling
+
+# --- Data Visualization ---
+seaborn==0.13.2               # Statistical visualization
+wordcloud==1.9.4              # Word cloud generation
+plotly==6.1.2                 # Interactive charts
+pyecharts==2.0.8              # Bindus ECharts wrapper
+kaleido==0.2.1                # Plotly static image export
+
+# --- Image Processing ---
+pillow==11.2.1                # Image processing
+opencv-python-headless==4.11.0.86  # Computer vision (no GUI)
+imageio==2.37.0               # Image/video I/O
+imageio-ffmpeg==0.5.1         # FFmpeg plugin for imageio
+pyzbar==0.1.9                 # Barcode/QR code reading
+qrcode==8.2                   # QR code generation
+python-barcode==0.15.1        # Barcode generation
+cairosvg==2.7.1               # SVG rendering
+scikit-image==0.25.2          # Image algorithms
+rawpy==0.23.3                 # RAW image processing
+exifread==3.1.0               # EXIF metadata reading
+piexif==1.1.3                 # EXIF metadata editing
+colorthief==0.2.1             # Dominant color extraction
+svgwrite==1.4.3               # SVG creation
+wand==0.6.13                  # ImageMagick binding
+
+# --- Video Processing ---
+moviepy==2.1.2                # Video editing
+ffmpeg-python==0.2.0          # FFmpeg wrapper
+av==14.3.0                    # PyAV - FFmpeg/libav binding
+vidgear==0.3.3                # Video processing toolkit
+imageio[ffmpeg]==2.37.0       # Video I/O with FFmpeg
+
+# --- Audio Processing ---
+pydub==0.25.1                 # Audio manipulation (requires ffmpeg)
+librosa==0.11.0               # Audio analysis
+soundfile==0.13.1             # Audio file I/O
+audioread==3.0.1              # Audio file reading
+mutagen==1.47.0               # Audio metadata
+tinytag==2.0.0                # Audio metadata (lightweight)
+pedalboard==0.9.18            # Audio effects (Spotify)
+noisereduce==3.0.3            # Noise reduction
+
+# --- Text Processing & NLP ---
+jieba==0.42.1                 # Chinese word segmentation
+pypinyin==0.54.0              # Chinese to Pinyin
+chardet==5.2.0                # Encoding detection
+python-Levenshtein==0.27.1    # String similarity
+faker==37.3.0                 # Fake data generation
+ftfy==6.3.1                   # Fix text encoding issues
+emoji==2.14.1                 # Emoji handling
+regex==2024.11.6              # Advanced regex
+thefuzz==0.22.1               # Fuzzy string matching
+unidecode==1.3.8              # Unicode to ASCII
+
+# --- Date & Time ---
+python-dateutil==2.9.0.post0  # Date parsing
+arrow==1.3.0                  # Friendly datetime
+lunarcalendar==0.0.9          # Lunar calendar
+pytz==2025.2                  # Timezone handling
+croniter==6.0.0               # Cron expression parsing
+
+# --- Network & Data Fetching ---
+requests==2.32.3              # HTTP requests
+httpx==0.28.1                 # Modern HTTP client (async support)
+urllib3==2.4.0                # HTTP library
+
+# --- File Processing ---
+openpyxl==3.1.5               # Excel (.xlsx)
+xlrd==2.0.1                   # Excel (.xls legacy)
+xlsxwriter==3.2.5             # Excel writing with formatting
+beautifulsoup4==4.13.4        # HTML parsing
+lxml==5.4.0                   # XML/HTML acceleration
+html5lib==1.1                 # HTML5 parser
+python-docx==1.1.2            # Word (.docx)
+PyPDF2==3.0.1                 # PDF processing
+pdfplumber==0.11.6            # PDF text/table extraction
+pymupdf==1.25.5               # PDF rendering (fitz)
+python-pptx==1.0.2            # PowerPoint (.pptx)
+tabulate==0.9.0               # Table formatting
+python-magic==0.4.27          # File type detection
+markdown==3.8                 # Markdown parsing
+pyyaml==6.0.2                 # YAML parsing
+toml==0.10.2                  # TOML parsing
+orjson==3.10.18               # Fast JSON
+xmltodict==0.14.2             # XML to dict
+csv23==0.1.6                  # CSV utilities
+
+# --- Compression & Archive ---
+py7zr==0.22.0                 # 7z archive
+rarfile==4.2                  # RAR archive (read-only)
+
+# --- Encryption & Encoding ---
+cryptography==45.0.4          # Cryptographic library
+pyjwt==2.10.1                 # JWT encoding/decoding
+hashids==1.3.1                # Hashids encoding
+base58==2.1.1                 # Base58 encoding
+
+# --- Data Validation & Conversion ---
+phonenumbers==9.0.2           # Phone number parsing
+validators==0.34.0            # URL/Email validation
+humanize==4.12.3              # Human-readable numbers
+pint==0.24.4                  # Unit conversion
+python-slugify==8.0.4         # Slug generation
+
+# --- Database & Data Storage ---
+sqlalchemy==2.0.41            # SQL toolkit (for data manipulation)
+
+# --- Math & Finance ---
+mpmath==1.3.0                 # Arbitrary precision math
+python-money==0.8.0           # Money/currency handling
+akshare==1.16.89              # Chinese financial data
+
+# --- Geolocation ---
+geopy==2.4.1                  # Geocoding (address <-> coordinates)
+
+# --- Utilities ---
+tqdm==4.67.1                  # Progress bars
+rich==14.0.0                  # Terminal formatting
+networkx==3.4.2               # Graph/network analysis
+more-itertools==10.7.0        # Extended itertools
+toolz==1.0.0                  # Functional utilities
+attrs==25.3.0                 # Class utilities
+boltons==24.1.0               # Python utilities collection
+cachetools==6.0.0             # Caching utilities
+retry==0.9.2                  # Retry decorator
+tenacity==9.1.2               # Retrying library
+shortuuid==1.0.13             # Short UUIDs
+nanoid==2.0.0                 # Nano IDs
+pendulum==3.1.0               # Better datetime
