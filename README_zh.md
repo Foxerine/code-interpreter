@@ -1,8 +1,10 @@
-# Code Interpreter API：一个有状态、高安全、高性能的 Python 沙箱
+# Code Interpreter API：一个有状态、高安全、高性能的代码沙箱
 
 [English](README.md)
 
-本项目是一个通过 API 驱动的、为实现**高安全性、有状态会话管理和强大性能**而设计的 Python 代码执行沙箱。它采用中心化的 **API 网关 (Gateway)** 和动态的 **工作实例池 (Worker Pool)** 架构，为每个用户提供一个完全隔离的、持久化的 Python 执行会话。
+本项目是一个通过 API 驱动的、为实现**高安全性、有状态会话管理和强大性能**而设计的代码执行沙箱。它采用中心化的 **API 网关 (Gateway)** 和动态的 **工作实例池 (Worker Pool)** 架构，为每个用户提供一个完全隔离的、持久化的执行会话。
+
+**全新双运行时支持**：Python 3.12 和 Node.js 18 LTS，以及全面的文档处理、浏览器自动化和 140+ 预装库。
 
 本项目的核心技术特性之一是其成功实现了 **“每个工作实例一个虚拟磁盘 (Virtual-Disk-per-Worker)”** 架构。这个先进的模型在运行时为每个工作容器动态地创建、格式化并通过 `losetup` 挂载一个专属的虚拟磁盘。该方法解决了在并发容器化环境中可靠地管理动态块设备的重大挑战，从而实现了卓越的 I/O 和文件系统隔离，这也是整个系统安全态势的基石。
 
@@ -17,6 +19,51 @@
 | **🔄 状态保持** | 真正的会话持久化。每个用户被映射到一个专用的、拥有持久化 Jupyter Kernel 的工作实例，在所有 API 调用间保持完整的执行上下文。 | 无状态（每次调用都是新环境），或通过序列化等方式模拟状态（通常速度慢且不完整）。 |
 | **🛠️ 可靠性** | “牲畜，而非宠物”的故障恢复模型。网关强制执行硬性超时并监控工作实例健康。任何失败、卡死或崩溃的实例都会被立即销毁和替换。 | 工作实例常被视为需要“修复”的状态化宠物，导致复杂的恢复逻辑，并增加了污染或不一致状态持续存在的风险。 |
 | **💡 I/O 隔离**| **每个工作实例一个虚拟磁盘**。每个工作实例都拥有自己动态挂载的块设备，提供了与主机和其他工作实例之间真正的文件系统和 I/O 隔离。 | 通常依赖于共享的主机卷（存在交叉读写和安全漏洞的风险），或者完全没有持久化的隔离存储。 |
+
+## 内置能力
+
+每个工作实例都预装了全面的工具和库。完整列表请参见 [`worker/CAPABILITIES.md`](worker/CAPABILITIES.md)。
+
+### 运行时环境
+
+| 运行时 | 版本 | 用途 |
+|--------|------|------|
+| **Python** | 3.12.12 | 主执行环境，配合 Jupyter Kernel |
+| **Node.js** | 18 LTS | 通过子进程执行 JavaScript/TypeScript |
+
+### 预装库 (140+)
+
+| 类别 | 主要库 | 能力 |
+|------|--------|------|
+| **科学计算** | numpy, pandas, scipy, scikit-learn, statsmodels | 数据分析、机器学习、统计 |
+| **数据可视化** | matplotlib, seaborn, plotly, pyecharts, wordcloud | 图表、图形、交互式绑图 |
+| **图像处理** | PIL, OpenCV, scikit-image, ImageMagick, rawpy | 图像编辑、计算机视觉、RAW 处理 |
+| **视频处理** | moviepy, ffmpeg-python, PyAV, vidgear | 视频编辑、编码、流处理 |
+| **音频处理** | pydub, librosa, soundfile, pedalboard | 音频编辑、分析、效果 |
+| **文档处理** | python-docx, openpyxl, python-pptx, PyPDF2, pdfplumber | Office 文档、PDF 操作 |
+| **文本与 NLP** | jieba, pypinyin, thefuzz, faker | 中文 NLP、模糊匹配 |
+| **浏览器自动化** | Playwright + Chromium | 网页抓取、截图、测试 |
+
+### 系统工具
+
+| 工具 | 版本 | 能力 |
+|------|------|------|
+| **LibreOffice** | 最新 | 文档转换 (docx/xlsx/pptx ↔ PDF) |
+| **Pandoc** | 最新 | 通用文档转换器 (Markdown, LaTeX 等) |
+| **FFmpeg** | 最新 | 音视频编码、转码、流处理 |
+| **ImageMagick** | 最新 | 图像转换 (200+ 格式) |
+| **Tesseract OCR** | 最新 | 文字识别 (英文 + 中文) |
+| **Poppler** | 最新 | PDF 工具 (pdftotext, pdftoppm 等) |
+| **Ghostscript** | 最新 | PDF/PostScript 处理 |
+
+### Node.js 全局包
+
+| 包 | 用途 |
+|----|------|
+| `docx` | Word 文档创建 |
+| `pptxgenjs` | PowerPoint 生成 |
+| `typescript` | TypeScript 编译器 |
+| `ts-node` | 直接执行 TypeScript |
 
 ## 性能基准测试
 
@@ -115,11 +162,13 @@
 
 | 参数 | Shell (`.sh`) | PowerShell (`.ps1`) | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- | :--- |
-| 最小空闲实例 | `--min-idle-workers` | `-MinIdleWorkers` | `5` | 池中保持的最小空闲、预热的工作实例数量。 |
+| 最小空闲实例 | `--min-idle-workers` | `-MinIdleWorkers` | `10` | 池中保持的最小空闲、预热的工作实例数量。 |
 | 最大实例总数 | `--max-total-workers`| `-MaxTotalWorkers` | `50` | 系统允许创建的并发工作容器的最大总数。 |
-| Worker CPU | `--worker-cpu` | `-WorkerCPU` | `1.0` | 分配给每个工作容器的 CPU 核心数 (例如 `1.5` 代表一个半核心)。 |
-| Worker 内存 | `--worker-ram-mb` | `-WorkerRAM_MB` | `1024` | 分配给每个工作容器的内存大小 (单位: MB)。 |
+| Worker CPU | `--worker-cpu` | `-WorkerCPU` | `1.5` | 分配给每个工作容器的 CPU 核心数 (例如 `1.5` 代表一个半核心)。 |
+| Worker 内存 | `--worker-ram-mb` | `-WorkerRAM_MB` | `1536` | 分配给每个工作容器的内存大小 (单位: MB)。 |
 | Worker 磁盘 | `--worker-disk-mb` | `-WorkerDisk_MB` | `500` | 为每个工作实例的沙箱文件系统创建的虚拟磁盘大小 (单位: MB)。 |
+
+> **注意**：默认资源限制已增加以支持 Node.js、LibreOffice 和 Playwright。如果部署时不需要这些功能，可以适当降低限制。
 
 **示例 (Linux/macOS):**
 ```bash

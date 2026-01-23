@@ -1,8 +1,10 @@
-# Code Interpreter API: A Stateful, Secure, and High-Performance Python Sandbox
+# Code Interpreter API: A Stateful, Secure, and High-Performance Code Sandbox
 
 [中文版](README_zh.md)
 
-This project provides a robust, API-driven Python code execution sandbox, engineered for high security, stateful session management, and strong performance. It utilizes a centralized **API Gateway** and a dynamic **Worker Pool** architecture, providing each user with a completely isolated and persistent Python session.
+This project provides a robust, API-driven code execution sandbox, engineered for high security, stateful session management, and strong performance. It utilizes a centralized **API Gateway** and a dynamic **Worker Pool** architecture, providing each user with a completely isolated and persistent execution session.
+
+**Now with dual-runtime support**: Python 3.12 and Node.js 18 LTS, plus comprehensive document processing, browser automation, and 140+ pre-installed libraries.
 
 A key technical feature of this project is its successful implementation of a **"Virtual-Disk-per-Worker"** architecture. This advanced model dynamically creates, formats, and mounts a dedicated virtual disk (`.img` file via `losetup`) for each worker container at runtime. This approach addresses the significant challenge of reliably managing dynamic block devices in a concurrent containerized environment, enabling superior I/O and filesystem isolation that is fundamental to the system's security posture.
 
@@ -17,6 +19,51 @@ Each worker is sandboxed within a multi-layered security model that includes str
 | **🔄 Statefulness** | True session persistence. Each user is mapped to a dedicated worker with a persistent Jupyter Kernel, maintaining the full execution context across all API calls. | Stateless (each call is a new environment) or emulated statefulness (e.g., saving/loading state via serialization), which is often slow and incomplete. |
 | **🛠️ Reliability** | A "Cattle, not Pets" fault tolerance model. The gateway enforces hard timeouts and monitors worker health. Any failed, hung, or crashed worker is instantly destroyed and replaced. | Workers are often treated as stateful "pets" that require complex recovery logic, increasing the risk of contaminated or inconsistent states persisting. |
 | **💡 I/O Isolation**| **Virtual-Disk-per-Worker Architecture**. Each worker gets its own dynamically mounted block device, providing true filesystem and I/O isolation from the host and other workers. | Often relies on shared host volumes (risk of cross-talk and security breaches) or has no persistent, isolated storage at all. |
+
+## Built-in Capabilities
+
+Each worker comes pre-loaded with a comprehensive set of tools and libraries. For a complete list, see [`worker/CAPABILITIES.md`](worker/CAPABILITIES.md).
+
+### Runtime Environments
+
+| Runtime | Version | Use Case |
+|---------|---------|----------|
+| **Python** | 3.12.12 | Primary execution environment with Jupyter Kernel |
+| **Node.js** | 18 LTS | JavaScript/TypeScript execution via subprocess |
+
+### Pre-installed Libraries (140+)
+
+| Category | Key Libraries | Capabilities |
+|----------|---------------|--------------|
+| **Scientific Computing** | numpy, pandas, scipy, scikit-learn, statsmodels | Data analysis, ML, statistics |
+| **Data Visualization** | matplotlib, seaborn, plotly, pyecharts, wordcloud | Charts, graphs, interactive plots |
+| **Image Processing** | PIL, OpenCV, scikit-image, ImageMagick, rawpy | Image editing, CV, RAW processing |
+| **Video Processing** | moviepy, ffmpeg-python, PyAV, vidgear | Video editing, encoding, streaming |
+| **Audio Processing** | pydub, librosa, soundfile, pedalboard | Audio editing, analysis, effects |
+| **Document Processing** | python-docx, openpyxl, python-pptx, PyPDF2, pdfplumber | Office documents, PDF manipulation |
+| **Text & NLP** | jieba, pypinyin, thefuzz, faker | Chinese NLP, fuzzy matching |
+| **Browser Automation** | Playwright + Chromium | Web scraping, screenshots, testing |
+
+### System Tools
+
+| Tool | Version | Capabilities |
+|------|---------|--------------|
+| **LibreOffice** | Latest | Document conversion (docx/xlsx/pptx ↔ PDF) |
+| **Pandoc** | Latest | Universal document converter (Markdown, LaTeX, etc.) |
+| **FFmpeg** | Latest | Audio/video encoding, transcoding, streaming |
+| **ImageMagick** | Latest | Image conversion (200+ formats) |
+| **Tesseract OCR** | Latest | Text recognition (English + Chinese) |
+| **Poppler** | Latest | PDF utilities (pdftotext, pdftoppm, etc.) |
+| **Ghostscript** | Latest | PDF/PostScript processing |
+
+### Node.js Packages (Global)
+
+| Package | Use Case |
+|---------|----------|
+| `docx` | Word document creation |
+| `pptxgenjs` | PowerPoint generation |
+| `typescript` | TypeScript compiler |
+| `ts-node` | Direct TypeScript execution |
 
 ## Performance Benchmarks
 
@@ -115,11 +162,13 @@ You can pass the following parameters to the startup scripts to configure the sy
 
 | Parameter | Shell (`.sh`) | PowerShell (`.ps1`) | Default | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| Min Idle Workers | `--min-idle-workers` | `-MinIdleWorkers` | `5` | The minimum number of idle, pre-warmed workers to keep ready in the pool. |
+| Min Idle Workers | `--min-idle-workers` | `-MinIdleWorkers` | `10` | The minimum number of idle, pre-warmed workers to keep ready in the pool. |
 | Max Total Workers| `--max-total-workers`| `-MaxTotalWorkers` | `50` | The absolute maximum number of concurrent worker containers the system is allowed to create. |
-| Worker CPU Limit | `--worker-cpu` | `-WorkerCPU` | `1.0` | The number of CPU cores to allocate to each worker container (e.g., `1.5` for one and a half cores). |
-| Worker RAM Limit | `--worker-ram-mb` | `-WorkerRAM_MB` | `1024` | The amount of RAM in megabytes to allocate to each worker container. |
+| Worker CPU Limit | `--worker-cpu` | `-WorkerCPU` | `1.5` | The number of CPU cores to allocate to each worker container (e.g., `1.5` for one and a half cores). |
+| Worker RAM Limit | `--worker-ram-mb` | `-WorkerRAM_MB` | `1536` | The amount of RAM in megabytes to allocate to each worker container. |
 | Worker Disk Size | `--worker-disk-mb` | `-WorkerDisk_MB` | `500` | The size of the virtual disk in megabytes to create for each worker's sandboxed filesystem. |
+
+> **Note**: Default resource limits have been increased to support Node.js, LibreOffice, and Playwright. For lightweight deployments without these features, you can reduce the limits.
 
 **Example (Linux/macOS):**
 ```bash
