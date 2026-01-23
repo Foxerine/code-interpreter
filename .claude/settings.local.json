@@ -5,7 +5,9 @@
       "Bash(docker logs:*)",
       "Bash(python:*)",
       "Bash(pip index:*)",
-      "Bash(pip install rawpy==)"
+      "Bash(pip install rawpy==)",
+      "Bash(xargs ls:*)",
+      "Bash(xargs:*)"
     ]
   }
 }

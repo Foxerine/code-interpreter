@@ -6,10 +6,12 @@
 set -e
 
 # --- ⚙️ 默认配置 ---
-MIN_IDLE_WORKERS=5
+# NOTE: Increased resource limits to support Node.js, LibreOffice, and Playwright
+# TODO: [OPTIMIZATION] Consider adding --lightweight flag for minimal deployments
+MIN_IDLE_WORKERS=10
 MAX_TOTAL_WORKERS=50
-WORKER_CPU=1.0
-WORKER_RAM_MB=1024
+WORKER_CPU=1.5
+WORKER_RAM_MB=1536
 WORKER_MAX_DISK_SIZE_MB=500
 
 # --- 🔄 解析命令行参数 ---
@@ -24,10 +26,10 @@ while [ "$#" -gt 0 ]; do
     -h|--help)
       echo "Usage: $0 [OPTIONS]"
       echo "Options:"
-      echo "  --min-idle-workers <num>    Minimum number of idle workers (default: 5)"
+      echo "  --min-idle-workers <num>    Minimum number of idle workers (default: 10)"
       echo "  --max-total-workers <num>   Maximum number of total workers (default: 50)"
-      echo "  --worker-cpu <float>        CPU cores per worker (default: 1.0)"
-      echo "  --worker-ram-mb <int>       RAM in MB per worker (default: 1024)"
+      echo "  --worker-cpu <float>        CPU cores per worker (default: 1.5)"
+      echo "  --worker-ram-mb <int>       RAM in MB per worker (default: 1536)"
       echo "  --worker-disk-mb <int>      Virtual disk size in MB per worker (default: 500)"
       echo "  -h, --help                  Show this help message"
       exit 0

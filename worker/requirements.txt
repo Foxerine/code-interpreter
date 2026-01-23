@@ -18,6 +18,21 @@ jupyter-kernel-gateway==3.0.1
 ipykernel==6.29.5
 
 # =============================================================================
+# SKILLS SUPPORT DEPENDENCIES
+# TODO: [OPTIMIZATION] Consider making these optional for lightweight deployments
+# =============================================================================
+
+# --- Browser Automation (webapp-testing, web-artifacts-builder, pptx skills) ---
+playwright==1.52.0
+
+# --- XML Security (docx, xlsx, pptx skills) ---
+defusedxml==0.7.1
+
+# --- MCP Server Development (mcp-builder skill) ---
+# TODO: [FEATURE] Add fastmcp when stable version is released
+# fastmcp>=0.1.0
+
+# =============================================================================
 # USER-FACING LIBRARIES (for code execution)
 # =============================================================================
 

@@ -32,14 +32,22 @@ WORKER_IMAGE_NAME: str = "code-interpreter-worker:latest"
 GATEWAY_INTERNAL_IP = os.environ.get("GATEWAY_INTERNAL_IP", "172.28.0.2")
 
 # --- Pool & Resource Configuration (now from environment variables) ---
+# TODO: [OPTIMIZATION] Consider dynamic resource allocation based on task type
+# TODO: [FEATURE] Add support for separate worker pools (lightweight vs full-featured)
 
 # Pool Sizing
-MIN_IDLE_WORKERS: int = int(os.environ.get("MIN_IDLE_WORKERS", 20))
-MAX_TOTAL_WORKERS: int = int(os.environ.get("MAX_TOTAL_WORKERS", 100))
+# NOTE: Reduced from 20/100 to 10/50 due to increased per-worker resource requirements
+# after adding Node.js, LibreOffice, and Playwright support
+MIN_IDLE_WORKERS: int = int(os.environ.get("MIN_IDLE_WORKERS", 10))
+MAX_TOTAL_WORKERS: int = int(os.environ.get("MAX_TOTAL_WORKERS", 50))
 
 # Per-Worker Resource Limits
-WORKER_CPU: float = float(os.environ.get("WORKER_CPU", 1.0))  # CPU cores
-WORKER_RAM_MB: int = int(os.environ.get("WORKER_RAM_MB", 1024))  # Memory in MB
+# NOTE: Increased from 1.0 CPU / 1024 MB RAM to accommodate:
+# - Node.js runtime (~50-100 MB)
+# - LibreOffice operations (~500-800 MB peak)
+# - Playwright browser automation (~300-500 MB)
+WORKER_CPU: float = float(os.environ.get("WORKER_CPU", 1.5))  # CPU cores
+WORKER_RAM_MB: int = int(os.environ.get("WORKER_RAM_MB", 1536))  # Memory in MB
 WORKER_MAX_DISK_SIZE_MB: int = int(os.environ.get("WORKER_MAX_DISK_SIZE_MB", 500))  # Virtual disk size in MB
 
 # --- Timeout Configuration ---

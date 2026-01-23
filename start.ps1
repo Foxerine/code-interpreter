@@ -1,18 +1,21 @@
 # start.ps1 - Ultimate Environment Setup Wizard & Starter (v15.0 - Configurable)
 
+# NOTE: Increased resource limits to support Node.js, LibreOffice, and Playwright
+# TODO: [OPTIMIZATION] Consider adding -Lightweight switch for minimal deployments
+
 [CmdletBinding()]
 param(
-# 最小空闲工作实例数
-    [int]$MinIdleWorkers = 15,
+# 最小空闲工作实例数 (reduced from 15 to 10 due to higher per-worker resource requirements)
+    [int]$MinIdleWorkers = 10,
 
 # 允许创建的最大工作实例总数
     [int]$MaxTotalWorkers = 50,
 
-# 每个工作实例的CPU核心数限制 (例如: 1.0, 1.5, 2.0)
-    [double]$WorkerCPU = 1.0,
+# 每个工作实例的CPU核心数限制 (increased from 1.0 to 1.5 for LibreOffice/Playwright)
+    [double]$WorkerCPU = 1.5,
 
-# 每个工作实例的内存限制 (单位: MB)
-    [int]$WorkerRAM_MB = 1024,
+# 每个工作实例的内存限制 (increased from 1024 to 1536 for Node.js/LibreOffice/Playwright)
+    [int]$WorkerRAM_MB = 1536,
 
 # 每个工作实例的虚拟磁盘大小 (单位: MB)
     [int]$WorkerDisk_MB = 500

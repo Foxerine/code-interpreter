@@ -3,11 +3,16 @@
 FROM python:3.12.12-slim-bookworm
 
 LABEL maintainer="Foxerine"
-LABEL description="A self-contained, secure, stateful Python code interpreter WORKER."
+LABEL description="A self-contained, secure, stateful Python/Node.js code interpreter WORKER."
 
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     PYTHONUNBUFFERED=1
+
+# =============================================================================
+# System Dependencies Installation
+# TODO: [OPTIMIZATION] Consider splitting into base/full images for lighter deployments
+# =============================================================================
 
 # Install system dependencies
 RUN apt-get update && \
@@ -32,6 +37,45 @@ RUN apt-get update && \
         libraw-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# =============================================================================
+# Document Processing Dependencies (Skills Support)
+# TODO: [OPTIMIZATION] LibreOffice is ~500MB, consider lazy loading or separate image
+# =============================================================================
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        # LibreOffice for document conversion (docx, xlsx, pptx, pdf)
+        libreoffice-writer libreoffice-calc libreoffice-impress \
+        libreoffice-common fonts-liberation \
+        # Pandoc for markdown/document conversion
+        pandoc \
+        # PDF processing tools
+        poppler-utils qpdf \
+        # OCR support (optional but useful for scanned PDFs)
+        tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim \
+        # Ghostscript for PDF enhancement
+        ghostscript \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# =============================================================================
+# Node.js Runtime (Skills Support)
+# TODO: [OPTIMIZATION] Consider using Node.js Alpine variant or lazy loading
+# =============================================================================
+
+# Install Node.js 18 LTS
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install global npm packages for document processing
+# TODO: [OPTIMIZATION] Consider installing these on-demand or in a separate layer
+RUN npm install -g \
+        docx \
+        pptxgenjs \
+        typescript \
+        ts-node \
+    && npm cache clean --force
+
 RUN useradd --create-home -d /sandbox --shell /bin/bash sandbox && \
     chown -R sandbox:sandbox /sandbox
 
@@ -50,6 +94,16 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
 RUN ipython kernel install --name "python3" --user
+
+# =============================================================================
+# Playwright Browser Installation (Skills Support)
+# TODO: [OPTIMIZATION] Playwright + Chromium adds ~400MB, consider lazy loading
+# TODO: [SECURITY] Review browser sandbox settings for production
+# =============================================================================
+
+# Install Playwright browsers (Chromium only to save space)
+RUN playwright install chromium && \
+    playwright install-deps chromium
 
 # Copy application code & configs
 COPY . /worker
