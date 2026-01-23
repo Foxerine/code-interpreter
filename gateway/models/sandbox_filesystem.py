@@ -70,7 +70,8 @@ class SandboxFileSystem(ModelBase, AioHttpClientSessionClassVarMixin):
         This method resolves .. BEFORE validation, preventing normpath bypass attacks.
 
         Args:
-            sandbox_path: Path in sandbox (e.g., /sandbox/data).
+            sandbox_path: Path in sandbox (e.g., /sandbox/data or /sandbox/data/file.txt).
+                          If path already includes filename, it will be normalized.
             filename: Filename (e.g., input.csv).
 
         Returns:
@@ -83,10 +84,20 @@ class SandboxFileSystem(ModelBase, AioHttpClientSessionClassVarMixin):
         if '/' in filename or '\\' in filename:
             raise ValueError("Invalid filename")
 
+        # Use PurePosixPath for safe path handling
+        sandbox_path_obj = PurePosixPath(sandbox_path)
+
+        # Handle case where sandbox_path already includes the filename
+        # e.g., path="/sandbox/file.txt", name="file.txt" -> extract dir "/sandbox"
+        # This makes the API more robust against common caller mistakes
+        if sandbox_path_obj.name == filename:
+            sandbox_path_obj = sandbox_path_obj.parent
+            l.debug(f"Auto-corrected path: extracted directory from full file path")
+
         # Use PurePosixPath for safe path validation
         # This handles all normalization internally and prevents traversal attacks
         sandbox_base = PurePosixPath(self.SANDBOX_ROOT)
-        requested_dir = PurePosixPath(sandbox_path)
+        requested_dir = sandbox_path_obj
         full_path = requested_dir / filename
 
         # relative_to() raises ValueError if path escapes the base
