@@ -17,7 +17,7 @@ ENV LANG=C.UTF-8 \
 # Install system dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        supervisor tini fontconfig curl iptables \
+        supervisor tini fontconfig curl iptables git \
         # OpenCV dependencies
         libgl1-mesa-glx libglib2.0-0 \
         # pyzbar dependencies
@@ -74,6 +74,10 @@ RUN npm install -g \
         pptxgenjs \
         typescript \
         ts-node \
+        sharp \
+        react \
+        react-dom \
+        react-icons \
     && npm cache clean --force
 
 RUN useradd --create-home -d /sandbox --shell /bin/bash sandbox && \
@@ -108,6 +112,42 @@ RUN playwright install chromium && \
 # Copy application code & configs
 COPY . /worker
 COPY ./supervisor/supervisord.conf /etc/supervisor/supervisord.conf
+
+# =============================================================================
+# Skills Repository (Claude Code Skills)
+# Copy from git submodule for latest skill definitions
+# Path: /mnt/skills/{skill-name}/...
+# =============================================================================
+COPY ./skills/skills /mnt/skills
+
+# Verify skills submodule was cloned (not empty)
+RUN if [ ! -d /mnt/skills/docx ]; then \
+        echo ""; \
+        echo "========================================================"; \
+        echo "ERROR: skills submodule is empty!"; \
+        echo ""; \
+        echo "Please clone the repository with --recursive:"; \
+        echo "  git clone --recursive <repo-url>"; \
+        echo ""; \
+        echo "Or initialize submodules for existing clone:"; \
+        echo "  git submodule update --init --recursive"; \
+        echo "========================================================"; \
+        echo ""; \
+        exit 1; \
+    fi && \
+    # Ensure skills are readable by sandbox user (read-only)
+    chmod -R a+rX /mnt/skills
+
+# Install canvas-design fonts to system
+RUN cp /mnt/skills/canvas-design/canvas-fonts/*.ttf /usr/share/fonts/truetype/ && \
+    fc-cache -fv
+
+# =============================================================================
+# Frontend Libraries (Offline versions for isolated sandbox)
+# =============================================================================
+RUN mkdir -p /mnt/libs && \
+    curl -fsSL https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.3/p5.min.js -o /mnt/libs/p5.min.js && \
+    curl -fsSL https://fonts.gstatic.com/s/poppins/v22/pxiEyp8kv8JHgFVrJJfecg.woff2 -o /usr/share/fonts/truetype/Poppins-Regular.woff2
 
 COPY ./entrypoint.sh /worker/entrypoint.sh
 RUN chmod +x /worker/entrypoint.sh
