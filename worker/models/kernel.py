@@ -16,6 +16,7 @@ from websockets.exceptions import ConnectionClosed, WebSocketException
 from websockets.protocol import OPEN
 
 from worker.utils.aiohttp_client_session_mixin import AioHttpClientSessionClassVarMixin
+from worker import meta_config
 from .base import ModelBase
 
 
@@ -52,7 +53,7 @@ class JupyterKernel(AioHttpClientSessionClassVarMixin):
     JUPYTER_HOST: ClassVar[str] = "127.0.0.1:8888"
     JUPYTER_API_URL: ClassVar[str] = f"http://{JUPYTER_HOST}"
     JUPYTER_WS_URL: ClassVar[str] = f"ws://{JUPYTER_HOST}"
-    EXECUTION_TIMEOUT: ClassVar[float] = 10.0
+    EXECUTION_TIMEOUT: ClassVar[float] = meta_config.EXECUTION_TIMEOUT
 
     # Reusable timeout for kernel API calls
     _API_TIMEOUT: ClassVar[aiohttp.ClientTimeout] = aiohttp.ClientTimeout(total=5.0)
@@ -250,8 +251,8 @@ class JupyterKernel(AioHttpClientSessionClassVarMixin):
 
             if not is_initialization:
                 end_time = time.monotonic()
-                duration = (end_time - start_time) * 1000
-                l.info(f"Code execution completed. Status: {result.status.upper()}, Duration: {duration:.2f} ms")
+                duration_secs = end_time - start_time
+                l.info(f"Code execution completed. Status: {result.status.upper()}, Duration: {duration_secs:.2f}s")
 
             return result
 

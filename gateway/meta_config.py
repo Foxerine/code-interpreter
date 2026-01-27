@@ -12,16 +12,17 @@ from pathlib import Path
 # --- Authentication ---
 def get_auth_token() -> str:
     token_file = Path('/gateway/auth_token.txt')
-    if 'AUTH_TOKEN' in os.environ:
-        return os.environ['AUTH_TOKEN']
+    if 'AUTH_TOKEN' in os.environ and os.environ['AUTH_TOKEN']:
+        token = os.environ['AUTH_TOKEN']
     elif token_file.exists():
         return token_file.read_text().strip()
     else:
         # Generate cryptographically secure token (32 bytes = 256 bits)
-        new_token = secrets.token_urlsafe(32)
-        token_file.write_text(new_token)
-        token_file.chmod(0o600)  # Restrict file permissions to owner only
-        return new_token
+        token = secrets.token_urlsafe(32)
+    # Always write token to file for start script to read
+    token_file.write_text(token)
+    token_file.chmod(0o600)  # Restrict file permissions to owner only
+    return token
 
 
 AUTH_TOKEN: str = get_auth_token()
@@ -53,7 +54,7 @@ WORKER_MAX_DISK_SIZE_MB: int = int(os.environ.get("WORKER_MAX_DISK_SIZE_MB", 500
 # --- Timeout Configuration ---
 WORKER_IDLE_TIMEOUT: int = int(os.environ.get("WORKER_IDLE_TIMEOUT", 3600))  # 1 hour
 RECYCLING_INTERVAL: int = int(os.environ.get("RECYCLING_INTERVAL", 300))  # 5 minutes
-MAX_EXECUTION_TIMEOUT: float = float(os.environ.get("MAX_EXECUTION_TIMEOUT", 15.0))  # 15 secs
+MAX_EXECUTION_TIMEOUT: float = float(os.environ.get("MAX_EXECUTION_TIMEOUT", 120.0))  # 120 secs
 
 # --- File Operation Limits ---
 MAX_FILE_SIZE_MB: int = int(os.environ.get("MAX_FILE_SIZE_MB", 100))  # 100MB default

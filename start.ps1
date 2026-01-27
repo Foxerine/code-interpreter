@@ -5,6 +5,9 @@
 
 [CmdletBinding()]
 param(
+# 自定义 API Key (留空则自动生成)
+    [string]$ApiKey = "",
+
 # 最小空闲工作实例数 (reduced from 15 to 10 due to higher per-worker resource requirements)
     [int]$MinIdleWorkers = 10,
 
@@ -41,7 +44,17 @@ $env:WORKER_CPU = $WorkerCPU
 $env:WORKER_RAM_MB = $WorkerRAM_MB
 $env:WORKER_MAX_DISK_SIZE_MB = $WorkerDisk_MB
 
+# 设置自定义 API Key（如果提供）
+if (-not [string]::IsNullOrWhiteSpace($ApiKey)) {
+    $env:AUTH_TOKEN = $ApiKey
+}
+
 Write-Host "`n⚙️  Applying Configuration:" -ForegroundColor Cyan
+if (-not [string]::IsNullOrWhiteSpace($ApiKey)) {
+    Write-Host "   - API Key               : (custom)" -ForegroundColor Yellow
+} else {
+    Write-Host "   - API Key               : (auto-generated)"
+}
 Write-Host "   - Min Idle Workers      : $env:MIN_IDLE_WORKERS"
 Write-Host "   - Max Total Workers     : $env:MAX_TOTAL_WORKERS"
 Write-Host "   - Worker CPU Limit      : $env:WORKER_CPU cores"

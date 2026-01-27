@@ -36,6 +36,7 @@ services:
       - GATEWAY_EXTERNAL_IP=172.29.0.100
       - GATEWAY_INTERNAL_IP=172.28.0.2
       # --- [新增] 从宿主机环境读取配置 ---
+      - AUTH_TOKEN=${AUTH_TOKEN:-}
       - MIN_IDLE_WORKERS=${MIN_IDLE_WORKERS}
       - MAX_TOTAL_WORKERS=${MAX_TOTAL_WORKERS}
       - WORKER_CPU=${WORKER_CPU}

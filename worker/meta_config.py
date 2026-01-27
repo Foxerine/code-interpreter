@@ -13,7 +13,7 @@ JUPYTER_API_URL: str = f"http://{JUPYTER_HOST}"
 JUPYTER_WS_URL: str = f"ws://{JUPYTER_HOST}"
 
 # --- Execution Configuration ---
-EXECUTION_TIMEOUT: float = float(os.environ.get("EXECUTION_TIMEOUT", 10.0))  # 10 seconds default
+EXECUTION_TIMEOUT: float = float(os.environ.get("EXECUTION_TIMEOUT", 120.0))  # 120 seconds default
 
 # --- Kernel Startup Configuration ---
 KERNEL_START_MAX_RETRIES: int = int(os.environ.get("KERNEL_START_MAX_RETRIES", 10))

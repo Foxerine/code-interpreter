@@ -47,6 +47,8 @@ RUN apt-get update && \
         # LibreOffice for document conversion (docx, xlsx, pptx, pdf)
         libreoffice-writer libreoffice-calc libreoffice-impress \
         libreoffice-common fonts-liberation \
+        # Java runtime for LibreOffice (required for some features)
+        default-jre-headless \
         # Pandoc for markdown/document conversion
         pandoc \
         # PDF processing tools
@@ -62,23 +64,30 @@ RUN apt-get update && \
 # TODO: [OPTIMIZATION] Consider using Node.js Alpine variant or lazy loading
 # =============================================================================
 
-# Install Node.js 18 LTS
+# Install Node.js 18 LTS and pnpm (faster parallel downloads)
+ENV PNPM_HOME=/usr/local/pnpm
+ENV PATH="$PNPM_HOME:$PATH"
+ENV NODE_PATH="/usr/local/lib/node_modules"
 RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+    npm install -g pnpm && \
+    mkdir -p $PNPM_HOME
 
 # Install global npm packages for document processing
-# TODO: [OPTIMIZATION] Consider installing these on-demand or in a separate layer
-RUN npm install -g \
+# pnpm is faster with parallel downloads and better caching
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install -g \
         docx \
         pptxgenjs \
         typescript \
         ts-node \
-        sharp \
         react \
         react-dom \
         react-icons \
-    && npm cache clean --force
+        sharp && \
+    # Create symlink to standard node_modules location for Node.js to find global packages
+    ln -sf $(pnpm root -g) /usr/local/lib/node_modules
 
 RUN useradd --create-home -d /sandbox --shell /bin/bash sandbox && \
     chown -R sandbox:sandbox /sandbox

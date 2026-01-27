@@ -8,6 +8,7 @@ set -e
 # --- ⚙️ 默认配置 ---
 # NOTE: Increased resource limits to support Node.js, LibreOffice, and Playwright
 # TODO: [OPTIMIZATION] Consider adding --lightweight flag for minimal deployments
+AUTH_TOKEN=""
 MIN_IDLE_WORKERS=10
 MAX_TOTAL_WORKERS=50
 WORKER_CPU=1.5
@@ -18,6 +19,7 @@ WORKER_MAX_DISK_SIZE_MB=500
 # 循环遍历所有传入的参数
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --api-key) AUTH_TOKEN="$2"; shift 2;;
     --min-idle-workers) MIN_IDLE_WORKERS="$2"; shift 2;;
     --max-total-workers) MAX_TOTAL_WORKERS="$2"; shift 2;;
     --worker-cpu) WORKER_CPU="$2"; shift 2;;
@@ -26,6 +28,7 @@ while [ "$#" -gt 0 ]; do
     -h|--help)
       echo "Usage: $0 [OPTIONS]"
       echo "Options:"
+      echo "  --api-key <string>          Custom API key (auto-generated if not set)"
       echo "  --min-idle-workers <num>    Minimum number of idle workers (default: 10)"
       echo "  --max-total-workers <num>   Maximum number of total workers (default: 50)"
       echo "  --worker-cpu <float>        CPU cores per worker (default: 1.5)"
@@ -39,6 +42,9 @@ while [ "$#" -gt 0 ]; do
 done
 
 # --- 🚀 导出配置为环境变量 ---
+if [ -n "$AUTH_TOKEN" ]; then
+    export AUTH_TOKEN
+fi
 export MIN_IDLE_WORKERS
 export MAX_TOTAL_WORKERS
 export WORKER_CPU
@@ -46,6 +52,11 @@ export WORKER_RAM_MB
 export WORKER_MAX_DISK_SIZE_MB
 
 echo "⚙️  Applying Configuration:"
+if [ -n "$AUTH_TOKEN" ]; then
+    echo "   - API Key               : (custom)"
+else
+    echo "   - API Key               : (auto-generated)"
+fi
 echo "   - Min Idle Workers      : $MIN_IDLE_WORKERS"
 echo "   - Max Total Workers     : $MAX_TOTAL_WORKERS"
 echo "   - Worker CPU Limit      : $WORKER_CPU cores"
