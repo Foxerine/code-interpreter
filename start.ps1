@@ -21,7 +21,10 @@ param(
     [int]$WorkerRAM_MB = 1536,
 
 # 每个工作实例的虚拟磁盘大小 (单位: MB)
-    [int]$WorkerDisk_MB = 500
+    [int]$WorkerDisk_MB = 500,
+
+# 启用 Worker 联网访问 (安全风险！)
+    [switch]$EnableInternet = $false
 )
 
 # --- 自我提升为管理员权限 ---
@@ -43,6 +46,7 @@ $env:MAX_TOTAL_WORKERS = $MaxTotalWorkers
 $env:WORKER_CPU = $WorkerCPU
 $env:WORKER_RAM_MB = $WorkerRAM_MB
 $env:WORKER_MAX_DISK_SIZE_MB = $WorkerDisk_MB
+$env:WORKER_INTERNET_ACCESS = if ($EnableInternet) { "true" } else { "false" }
 
 # 设置自定义 API Key（如果提供）
 if (-not [string]::IsNullOrWhiteSpace($ApiKey)) {
@@ -60,6 +64,20 @@ Write-Host "   - Max Total Workers     : $env:MAX_TOTAL_WORKERS"
 Write-Host "   - Worker CPU Limit      : $env:WORKER_CPU cores"
 Write-Host "   - Worker RAM Limit      : $env:WORKER_RAM_MB MB"
 Write-Host "   - Worker Disk Size      : $env:WORKER_MAX_DISK_SIZE_MB MB"
+Write-Host "   - Worker Internet Access: $env:WORKER_INTERNET_ACCESS"
+
+# Security warning for internet access
+if ($EnableInternet) {
+    Write-Host ""
+    Write-Host "WARNING: Internet access is ENABLED for workers!" -ForegroundColor Red
+    Write-Host "   Security risks include:" -ForegroundColor Yellow
+    Write-Host "   - Attackers may download malicious tools" -ForegroundColor Yellow
+    Write-Host "   - Attackers may establish reverse shells" -ForegroundColor Yellow
+    Write-Host "   - Attackers may abuse network for attacks (DDoS, scanning, etc.)" -ForegroundColor Yellow
+    Write-Host "   - Private IPs are blocked, but public internet is fully accessible" -ForegroundColor Yellow
+    Write-Host "   By continuing, you accept all security consequences." -ForegroundColor Yellow
+    Write-Host ""
+}
 
 
 # ==============================================================================

@@ -14,6 +14,7 @@ MAX_TOTAL_WORKERS=50
 WORKER_CPU=1.5
 WORKER_RAM_MB=1536
 WORKER_MAX_DISK_SIZE_MB=500
+WORKER_INTERNET_ACCESS=false
 
 # --- 🔄 解析命令行参数 ---
 # 循环遍历所有传入的参数
@@ -25,6 +26,7 @@ while [ "$#" -gt 0 ]; do
     --worker-cpu) WORKER_CPU="$2"; shift 2;;
     --worker-ram-mb) WORKER_RAM_MB="$2"; shift 2;;
     --worker-disk-mb) WORKER_MAX_DISK_SIZE_MB="$2"; shift 2;;
+    --enable-internet) WORKER_INTERNET_ACCESS=true; shift;;
     -h|--help)
       echo "Usage: $0 [OPTIONS]"
       echo "Options:"
@@ -34,6 +36,7 @@ while [ "$#" -gt 0 ]; do
       echo "  --worker-cpu <float>        CPU cores per worker (default: 1.5)"
       echo "  --worker-ram-mb <int>       RAM in MB per worker (default: 1536)"
       echo "  --worker-disk-mb <int>      Virtual disk size in MB per worker (default: 500)"
+      echo "  --enable-internet           Enable internet access for workers (SECURITY RISK!)"
       echo "  -h, --help                  Show this help message"
       exit 0
       ;;
@@ -50,6 +53,7 @@ export MAX_TOTAL_WORKERS
 export WORKER_CPU
 export WORKER_RAM_MB
 export WORKER_MAX_DISK_SIZE_MB
+export WORKER_INTERNET_ACCESS
 
 echo "⚙️  Applying Configuration:"
 if [ -n "$AUTH_TOKEN" ]; then
@@ -62,6 +66,20 @@ echo "   - Max Total Workers     : $MAX_TOTAL_WORKERS"
 echo "   - Worker CPU Limit      : $WORKER_CPU cores"
 echo "   - Worker RAM Limit      : $WORKER_RAM_MB MB"
 echo "   - Worker Disk Size      : $WORKER_MAX_DISK_SIZE_MB MB"
+echo "   - Worker Internet Access: $WORKER_INTERNET_ACCESS"
+
+# Security warning for internet access
+if [ "$WORKER_INTERNET_ACCESS" = "true" ]; then
+    echo ""
+    echo "⚠️  WARNING: Internet access is ENABLED for workers!"
+    echo "   Security risks include:"
+    echo "   - Attackers may download malicious tools"
+    echo "   - Attackers may establish reverse shells"
+    echo "   - Attackers may abuse network for attacks (DDoS, scanning, etc.)"
+    echo "   - Private IPs are blocked, but public internet is fully accessible"
+    echo "   By continuing, you accept all security consequences."
+    echo ""
+fi
 
 # --- 🔎 检查网关容器是否已在运行 ---
 CONTAINER_NAME="code-interpreter_gateway"

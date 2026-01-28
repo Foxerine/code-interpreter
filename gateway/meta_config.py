@@ -30,7 +30,18 @@ AUTH_TOKEN: str = get_auth_token()
 # --- Network & Naming ---
 INTERNAL_NETWORK_NAME: str = os.environ.get("INTERNAL_NETWORK_NAME", "code-interpreter_workers_isolated_net")
 WORKER_IMAGE_NAME: str = "code-interpreter-worker:latest"
-GATEWAY_INTERNAL_IP = os.environ.get("GATEWAY_INTERNAL_IP", "172.28.0.2")
+GATEWAY_INTERNAL_IP: str = os.environ.get("GATEWAY_INTERNAL_IP", "172.28.0.2")
+
+# --- Worker Internet Access Configuration ---
+# SECURITY WARNING: Enabling internet access for workers introduces significant security risks:
+# - Attackers may download malicious tools
+# - Attackers may establish reverse shells
+# - Attackers may abuse network for attacks (DDoS, scanning, etc.)
+# Private IPs are blocked via iptables, but public internet is fully accessible.
+# Only enable this if you understand and accept the security consequences.
+WORKER_INTERNET_ACCESS: bool = os.environ.get('WORKER_INTERNET_ACCESS', 'false').lower() == 'true'
+INTERNET_NETWORK_NAME: str = os.environ.get("INTERNET_NETWORK_NAME", "code-interpreter_workers_internet_net")
+GATEWAY_INTERNET_NET_IP: str = os.environ.get("GATEWAY_INTERNET_NET_IP", "172.30.0.2")
 
 # --- Pool & Resource Configuration (now from environment variables) ---
 # TODO: [OPTIMIZATION] Consider dynamic resource allocation based on task type

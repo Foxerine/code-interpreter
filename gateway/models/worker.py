@@ -226,6 +226,10 @@ class WorkerPool:
     WORKER_MAX_DISK_SIZE_MB: ClassVar[int]
     WORKER_CPU: ClassVar[float]
     WORKER_RAM_MB: ClassVar[int]
+    # Internet access configuration
+    WORKER_INTERNET_ACCESS: ClassVar[bool]
+    INTERNET_NETWORK_NAME: ClassVar[str]
+    GATEWAY_INTERNET_NET_IP: ClassVar[str]
 
     # Constants
     MAX_CREATION_RETRIES: ClassVar[int] = 3
@@ -290,6 +294,13 @@ class WorkerPool:
         cls.WORKER_MAX_DISK_SIZE_MB = meta_config.WORKER_MAX_DISK_SIZE_MB
         cls.WORKER_CPU = meta_config.WORKER_CPU
         cls.WORKER_RAM_MB = meta_config.WORKER_RAM_MB
+        # Internet access configuration
+        cls.WORKER_INTERNET_ACCESS = meta_config.WORKER_INTERNET_ACCESS
+        cls.INTERNET_NETWORK_NAME = meta_config.INTERNET_NETWORK_NAME
+        cls.GATEWAY_INTERNET_NET_IP = meta_config.GATEWAY_INTERNET_NET_IP
+
+        if cls.WORKER_INTERNET_ACCESS:
+            l.warning("Worker internet access is ENABLED. Workers can access public internet (private IPs blocked).")
 
         cls._docker = Docker()
         cls._workers = {}
@@ -405,12 +416,23 @@ class WorkerPool:
             l.info(f"Creating worker container: {container_name}")
             device_mapping = [{"PathOnHost": loop_device, "PathInContainer": "/dev/vdisk", "CgroupPermissions": "rwm"}]
 
+            # Select network based on internet access configuration
+            if cls.WORKER_INTERNET_ACCESS:
+                network_name = cls.INTERNET_NETWORK_NAME
+                gateway_ip = cls.GATEWAY_INTERNET_NET_IP
+            else:
+                network_name = cls.INTERNAL_NETWORK_NAME
+                gateway_ip = cls.GATEWAY_INTERNAL_IP
+
             container_config = {
                 'Image': cls.WORKER_IMAGE_NAME,
-                'Env': [f"GATEWAY_INTERNAL_IP={cls.GATEWAY_INTERNAL_IP}"],
+                'Env': [
+                    f"GATEWAY_INTERNAL_IP={gateway_ip}",
+                    f"WORKER_INTERNET_ACCESS={'true' if cls.WORKER_INTERNET_ACCESS else 'false'}",
+                ],
                 'HostConfig': {
                     'ReadonlyRootfs': True,
-                    'NetworkMode': cls.INTERNAL_NETWORK_NAME,
+                    'NetworkMode': network_name,
                     'Memory': cls.WORKER_RAM_MB * 1024 * 1024,
                     'NanoCpus': int(cls.WORKER_CPU * 1_000_000_000),
                     # SECURITY DESIGN: Elevated capabilities required for sandbox functionality:
