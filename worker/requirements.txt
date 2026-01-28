@@ -109,6 +109,12 @@ croniter==6.0.0               # Cron expression parsing
 requests==2.32.3              # HTTP requests
 httpx==0.28.1                 # Modern HTTP client (async support)
 urllib3==2.4.0                # HTTP library
+feedparser==6.0.11            # RSS/Atom feed parsing
+trafilatura==2.0.0            # Web content extraction
+newspaper3k==0.2.8            # News article extraction
+readability-lxml==0.8.1       # Article readability extraction
+html2text==2024.2.26          # HTML to Markdown conversion
+pyquery==2.0.1                # jQuery-like HTML manipulation
 
 # --- File Processing ---
 openpyxl==3.1.5               # Excel (.xlsx)
