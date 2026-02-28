@@ -7,5 +7,5 @@
     -MaxTotalWorkers 10 `
     -WorkerCPU 1.5 `
     -WorkerRAM_MB 1536 `
-    -WorkerDisk_MB 500 `
+    -WorkerDisk_MB 1500 `
     -EnableInternet

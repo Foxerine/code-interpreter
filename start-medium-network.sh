@@ -11,6 +11,6 @@ exec "$SCRIPT_DIR/start.sh" \
     --max-total-workers 10 \
     --worker-cpu 1.5 \
     --worker-ram-mb 1536 \
-    --worker-disk-mb 500 \
+    --worker-disk-mb 1500 \
     --enable-internet \
     "$@"

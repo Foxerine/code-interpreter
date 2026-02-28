@@ -1,6 +1,15 @@
 # worker/Dockerfile
+#
+# Multi-stage parallel build: BuildKit runs independent stages concurrently.
+# Timeline (approximate):
+#   node-builder:    |===== Node.js + pnpm packages =====|
+#   python-builder:  |===== Python deps + Playwright =====|
+#   asset-fetcher:   |== downloads ==|
+#   final:           |========== apt-get ALL ==========|← COPY from above stages →|
+#
+# Requires: DOCKER_BUILDKIT=1 (default in Docker Desktop / Compose v2)
 
-FROM python:3.12.12-slim-bookworm
+FROM python:3.12.12-slim-bookworm AS base
 
 LABEL maintainer="Foxerine"
 LABEL description="A self-contained, secure, stateful Python/Node.js code interpreter WORKER."
@@ -9,15 +18,75 @@ ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     PYTHONUNBUFFERED=1
 
-# =============================================================================
-# System Dependencies Installation
-# TODO: [OPTIMIZATION] Consider splitting into base/full images for lighter deployments
-# =============================================================================
 
-# Install system dependencies
+# =============================================================================
+# Parallel Stage 1: Node.js packages (independent, no system deps needed)
+# Uses official node image - faster than nodesource script
+# =============================================================================
+FROM node:18.20.8-slim AS node-builder
+
+RUN npm install -g pnpm@10.30.3
+ENV PNPM_HOME=/usr/local/share/pnpm
+ENV PATH="$PNPM_HOME:$PATH"
+
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    mkdir -p $PNPM_HOME && \
+    pnpm install -g \
+        docx@9.6.0 \
+        pptxgenjs@4.0.1 \
+        typescript@5.9.3 \
+        ts-node@10.9.2 \
+        react@19.2.4 \
+        react-dom@19.2.4 \
+        react-icons@5.5.0 \
+        sharp@0.34.5 && \
+    ln -sf $(pnpm root -g) /usr/local/lib/node_modules
+
+
+# =============================================================================
+# Parallel Stage 2: Python dependencies + Playwright browser binary
+# Wheels are pre-built, no system headers needed at install time
+# =============================================================================
+FROM base AS python-builder
+
+COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /uvx /bin/
+COPY ./requirements.txt /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system -r /tmp/requirements.txt && rm /tmp/requirements.txt
+
+RUN ipython kernel install --name "python3" --user
+
+# Download Playwright Chromium binary (system deps installed in final stage)
+RUN playwright install chromium
+
+
+# =============================================================================
+# Parallel Stage 3: Asset downloads (lightweight, independent)
+# =============================================================================
+FROM debian:bookworm-slim AS asset-fetcher
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl ca-certificates fontconfig && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY ./assets/simhei.ttf /usr/share/fonts/truetype/
+
+RUN mkdir -p /mnt/libs && \
+    curl -fsSL https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.3/p5.min.js -o /mnt/libs/p5.min.js && \
+    curl -fsSL https://fonts.gstatic.com/s/poppins/v22/pxiEyp8kv8JHgFVrJJfecg.woff2 -o /usr/share/fonts/truetype/Poppins-Regular.woff2
+
+RUN fc-cache -fv
+
+
+# =============================================================================
+# Final Stage: Merge all parallel stages
+# =============================================================================
+FROM base
+
+# --- System Dependencies (MERGED into one apt-get call) ---
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        supervisor tini fontconfig curl iptables git \
+        supervisor tini fontconfig iptables git \
         # OpenCV dependencies
         libgl1-mesa-glx libglib2.0-0 \
         # pyzbar dependencies
@@ -35,15 +104,6 @@ RUN apt-get update && \
         imagemagick libmagickwand-dev \
         # RAW image processing (rawpy)
         libraw-dev \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# =============================================================================
-# Document Processing Dependencies (Skills Support)
-# TODO: [OPTIMIZATION] LibreOffice is ~500MB, consider lazy loading or separate image
-# =============================================================================
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
         # LibreOffice for document conversion (docx, xlsx, pptx, pdf)
         libreoffice-writer libreoffice-calc libreoffice-impress \
         libreoffice-common fonts-liberation \
@@ -59,74 +119,56 @@ RUN apt-get update && \
         ghostscript \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# =============================================================================
-# Node.js Runtime (Skills Support)
-# TODO: [OPTIMIZATION] Consider using Node.js Alpine variant or lazy loading
-# =============================================================================
+# --- Copy Node.js from official image + pnpm packages from builder ---
+COPY --from=node:18.20.8-slim /usr/local/bin/node /usr/local/bin/
+COPY --from=node:18.20.8-slim /usr/local/include/node /usr/local/include/node
+COPY --from=node-builder /usr/local/lib/node_modules /usr/local/lib/node_modules
+COPY --from=node-builder /usr/local/share/pnpm /usr/local/share/pnpm
+RUN ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
+    ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx && \
+    ln -sf /usr/local/share/pnpm/bin/pnpm /usr/local/bin/pnpm
 
-# Install Node.js 18.20.8 LTS (pinned) and pnpm (faster parallel downloads)
-ENV NODE_VERSION=18.20.8
-ENV PNPM_HOME=/usr/local/pnpm
-ENV PATH="$PNPM_HOME:$PATH"
 ENV NODE_PATH="/usr/local/lib/node_modules"
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
-    apt-get install -y --no-install-recommends nodejs=${NODE_VERSION}-1nodesource1 && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* && \
-    npm install -g pnpm@10.30.3 && \
-    mkdir -p $PNPM_HOME
+ENV PNPM_HOME="/usr/local/share/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
 
-# Install global npm packages for document processing (all versions pinned)
-# pnpm is faster with parallel downloads and better caching
-RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
-    pnpm install -g \
-        docx@9.6.0 \
-        pptxgenjs@4.0.1 \
-        typescript@5.9.3 \
-        ts-node@10.9.2 \
-        react@19.2.4 \
-        react-dom@19.2.4 \
-        react-icons@5.5.0 \
-        sharp@0.34.5 && \
-    # Create symlink to standard node_modules location for Node.js to find global packages
-    ln -sf $(pnpm root -g) /usr/local/lib/node_modules
+# --- Copy Python packages + Playwright browser from builder ---
+COPY --from=python-builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=python-builder /usr/local/bin /tmp/python-bin/
+# Merge bin without overwriting existing files (python, pip, etc. already exist in base)
+RUN find /tmp/python-bin -maxdepth 1 -type f | while read f; do \
+        name=$(basename "$f"); \
+        [ ! -f "/usr/local/bin/$name" ] && cp "$f" /usr/local/bin/; \
+    done; \
+    rm -rf /tmp/python-bin
+COPY --from=python-builder /root/.local /root/.local
 
+# Copy Playwright browser binary + install system deps (fast - just runtime libs)
+COPY --from=python-builder /root/.cache/ms-playwright /root/.cache/ms-playwright
+RUN playwright install-deps chromium && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# --- Copy assets from fetcher ---
+COPY --from=asset-fetcher /mnt/libs /mnt/libs
+COPY --from=asset-fetcher /usr/share/fonts/truetype/simhei.ttf /usr/share/fonts/truetype/
+COPY --from=asset-fetcher /usr/share/fonts/truetype/Poppins-Regular.woff2 /usr/share/fonts/truetype/
+
+# --- Sandbox user ---
 RUN useradd --create-home -d /sandbox --shell /bin/bash sandbox && \
     chown -R sandbox:sandbox /sandbox
 
-# Install font
-COPY ./assets/simhei.ttf /usr/share/fonts/truetype/
-RUN fc-cache -fv
-
-# Install uv
+# --- Install uv (for runtime use) ---
 COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /uvx /bin/
 
-# Install Python dependencies
+# --- Application code ---
 WORKDIR /worker
 ENV PYTHONPATH=/
-COPY ./requirements.txt /tmp/requirements.txt
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
-RUN ipython kernel install --name "python3" --user
-
-# =============================================================================
-# Playwright Browser Installation (Skills Support)
-# TODO: [OPTIMIZATION] Playwright + Chromium adds ~400MB, consider lazy loading
-# TODO: [SECURITY] Review browser sandbox settings for production
-# =============================================================================
-
-# Install Playwright browsers (Chromium only to save space)
-RUN playwright install chromium && \
-    playwright install-deps chromium
-
-# Copy application code & configs
 COPY . /worker
 COPY ./supervisor/supervisord.conf /etc/supervisor/supervisord.conf
 
 # =============================================================================
 # Skills Repository (Claude Code Skills)
-# Copy from git submodule for latest skill definitions
-# Path: /mnt/skills/{skill-name}/...
 # =============================================================================
 COPY ./skills/skills /mnt/skills
 
@@ -145,26 +187,16 @@ RUN if [ ! -d /mnt/skills/docx ]; then \
         echo ""; \
         exit 1; \
     fi && \
-    # Ensure skills are readable by sandbox user (read-only)
     chmod -R a+rX /mnt/skills
 
 # Install canvas-design fonts to system
 RUN cp /mnt/skills/canvas-design/canvas-fonts/*.ttf /usr/share/fonts/truetype/ && \
     fc-cache -fv
 
-# =============================================================================
-# Frontend Libraries (Offline versions for isolated sandbox)
-# =============================================================================
-RUN mkdir -p /mnt/libs && \
-    curl -fsSL https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.3/p5.min.js -o /mnt/libs/p5.min.js && \
-    curl -fsSL https://fonts.gstatic.com/s/poppins/v22/pxiEyp8kv8JHgFVrJJfecg.woff2 -o /usr/share/fonts/truetype/Poppins-Regular.woff2
-
 COPY ./entrypoint.sh /worker/entrypoint.sh
 RUN chmod +x /worker/entrypoint.sh
 
-# [更新] 将最终的工作目录切换到沙箱
 WORKDIR /sandbox
 
 EXPOSE 8000
 ENTRYPOINT ["/worker/entrypoint.sh"]
-
