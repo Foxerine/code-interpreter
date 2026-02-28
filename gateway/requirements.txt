@@ -1,10 +1,16 @@
-fastapi
-uvicorn[standard]
-loguru
-aiohttp
-pydantic
-aiodocker
-aiofiles
-anyio
-orjson
-ssrf-protect @ git+https://github.com/kobotoolbox/ssrf-protect.git
+# =============================================================================
+# Code Interpreter Gateway - Python Dependencies
+# All versions pinned for reproducibility
+# Last updated: 2026-02-28
+# =============================================================================
+
+fastapi==0.115.12
+uvicorn[standard]==0.34.3
+loguru==0.7.3
+aiohttp==3.12.7
+pydantic==2.11.5
+aiodocker==0.26.0
+aiofiles==24.1.0
+anyio==4.12.1
+orjson==3.10.18
+ssrf-protect @ git+https://github.com/kobotoolbox/ssrf-protect.git@9b97d3f0fd8f737a38dd7a6b64efeffc03ab3cdd

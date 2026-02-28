@@ -1,0 +1,13 @@
+# Prevent unnecessary build context changes from triggering rebuilds
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+*.md
+*.log
+.env
+.env.*

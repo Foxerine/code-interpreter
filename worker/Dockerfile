@@ -64,28 +64,29 @@ RUN apt-get update && \
 # TODO: [OPTIMIZATION] Consider using Node.js Alpine variant or lazy loading
 # =============================================================================
 
-# Install Node.js 18 LTS and pnpm (faster parallel downloads)
+# Install Node.js 18.20.8 LTS (pinned) and pnpm (faster parallel downloads)
+ENV NODE_VERSION=18.20.8
 ENV PNPM_HOME=/usr/local/pnpm
 ENV PATH="$PNPM_HOME:$PATH"
 ENV NODE_PATH="/usr/local/lib/node_modules"
 RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
-    apt-get install -y --no-install-recommends nodejs && \
+    apt-get install -y --no-install-recommends nodejs=${NODE_VERSION}-1nodesource1 && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
-    npm install -g pnpm && \
+    npm install -g pnpm@10.30.3 && \
     mkdir -p $PNPM_HOME
 
-# Install global npm packages for document processing
+# Install global npm packages for document processing (all versions pinned)
 # pnpm is faster with parallel downloads and better caching
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install -g \
-        docx \
-        pptxgenjs \
-        typescript \
-        ts-node \
-        react \
-        react-dom \
-        react-icons \
-        sharp && \
+        docx@9.6.0 \
+        pptxgenjs@4.0.1 \
+        typescript@5.9.3 \
+        ts-node@10.9.2 \
+        react@19.2.4 \
+        react-dom@19.2.4 \
+        react-icons@5.5.0 \
+        sharp@0.34.5 && \
     # Create symlink to standard node_modules location for Node.js to find global packages
     ln -sf $(pnpm root -g) /usr/local/lib/node_modules
 
