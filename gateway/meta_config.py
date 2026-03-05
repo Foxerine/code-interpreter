@@ -29,7 +29,7 @@ AUTH_TOKEN: str = get_auth_token()
 
 # --- Network & Naming ---
 INTERNAL_NETWORK_NAME: str = os.environ.get("INTERNAL_NETWORK_NAME", "code-interpreter_workers_isolated_net")
-WORKER_IMAGE_NAME: str = "code-interpreter-worker:latest"
+WORKER_IMAGE_NAME: str = os.environ.get("WORKER_IMAGE_NAME", "ghcr.io/foxerine/code-interpreter-worker:latest")
 GATEWAY_INTERNAL_IP: str = os.environ.get("GATEWAY_INTERNAL_IP", "172.28.0.2")
 
 # --- Worker Internet Access Configuration ---

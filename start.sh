@@ -15,6 +15,8 @@ WORKER_CPU=1.5
 WORKER_RAM_MB=1536
 WORKER_MAX_DISK_SIZE_MB=500
 WORKER_INTERNET_ACCESS=false
+BUILD_MODE=false
+IMAGE_TAG="latest"
 
 # --- 🔄 解析命令行参数 ---
 # 循环遍历所有传入的参数
@@ -27,6 +29,8 @@ while [ "$#" -gt 0 ]; do
     --worker-ram-mb) WORKER_RAM_MB="$2"; shift 2;;
     --worker-disk-mb) WORKER_MAX_DISK_SIZE_MB="$2"; shift 2;;
     --enable-internet) WORKER_INTERNET_ACCESS=true; shift;;
+    --build) BUILD_MODE=true; shift;;
+    --image-tag) IMAGE_TAG="$2"; shift 2;;
     -h|--help)
       echo "Usage: $0 [OPTIONS]"
       echo "Options:"
@@ -37,6 +41,8 @@ while [ "$#" -gt 0 ]; do
       echo "  --worker-ram-mb <int>       RAM in MB per worker (default: 1536)"
       echo "  --worker-disk-mb <int>      Virtual disk size in MB per worker (default: 500)"
       echo "  --enable-internet           Enable internet access for workers (SECURITY RISK!)"
+      echo "  --build                    Force local build instead of pulling from registry"
+      echo "  --image-tag <tag>          Image tag to use (default: latest)"
       echo "  -h, --help                  Show this help message"
       exit 0
       ;;
@@ -54,6 +60,7 @@ export WORKER_CPU
 export WORKER_RAM_MB
 export WORKER_MAX_DISK_SIZE_MB
 export WORKER_INTERNET_ACCESS
+export IMAGE_TAG
 
 echo "⚙️  Applying Configuration:"
 if [ -n "$AUTH_TOKEN" ]; then
@@ -67,6 +74,8 @@ echo "   - Worker CPU Limit      : $WORKER_CPU cores"
 echo "   - Worker RAM Limit      : $WORKER_RAM_MB MB"
 echo "   - Worker Disk Size      : $WORKER_MAX_DISK_SIZE_MB MB"
 echo "   - Worker Internet Access: $WORKER_INTERNET_ACCESS"
+echo "   - Image Tag             : $IMAGE_TAG"
+echo "   - Build Mode            : $BUILD_MODE"
 
 # Security warning for internet access
 if [ "$WORKER_INTERNET_ACCESS" = "true" ]; then
@@ -98,8 +107,14 @@ echo "   -> Container is not running. Proceeding with startup."
 
 # --- 🐳 启动 Docker Compose ---
 echo ""
-echo "🚀 Starting the Code Interpreter environment..."
-docker-compose up --build -d
+if [ "$BUILD_MODE" = "true" ]; then
+    echo "🔨 Building images locally and starting services..."
+    docker-compose up --build -d
+else
+    echo "🚀 Pulling images from registry and starting services..."
+    docker-compose pull
+    docker-compose up -d
+fi
 
 # --- 🧹 清理临时的 builder 容器 ---
 BUILDER_ID=$(docker ps -a -q --filter "name=code-interpreter_worker_builder")

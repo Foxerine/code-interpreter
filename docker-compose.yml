@@ -4,7 +4,7 @@ services:
     build:
       context: ./gateway
       dockerfile: Dockerfile
-    image: code-interpreter-gateway:latest
+    image: ghcr.io/foxerine/code-interpreter-gateway:${IMAGE_TAG:-latest}
     container_name: code-interpreter_gateway
     restart: unless-stopped
     ports:
@@ -49,14 +49,15 @@ services:
       - WORKER_CPU=${WORKER_CPU}
       - WORKER_RAM_MB=${WORKER_RAM_MB}
       - WORKER_MAX_DISK_SIZE_MB=${WORKER_MAX_DISK_SIZE_MB}
+      - WORKER_IMAGE_NAME=ghcr.io/foxerine/code-interpreter-worker:${IMAGE_TAG:-latest}
     depends_on:
-      - worker # 确保 worker 镜像被构建
+      - worker # 确保 worker 镜像存在
 
   worker:
     build:
       context: ./worker
       dockerfile: Dockerfile
-    image: code-interpreter-worker:latest
+    image: ghcr.io/foxerine/code-interpreter-worker:${IMAGE_TAG:-latest}
     container_name: code-interpreter_worker_builder # 给 builder 容器一个固定名字，方便清理
     entrypoint: /bin/true # 覆盖 ENTRYPOINT，使其立即退出
     networks:

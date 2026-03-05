@@ -191,6 +191,12 @@ class SandboxFileSystem(ModelBase, AioHttpClientSessionClassVarMixin):
         Reads from the sandbox filesystem and uploads to the presigned URL
         using streaming to avoid loading entire file into memory.
 
+        Supports two upload modes:
+        - **POST** (preferred): When ``upload_fields`` is provided, uses multipart
+          form POST with S3 presigned POST policy (enforces content-length-range at S3 level).
+        - **PUT** (legacy): When ``upload_fields`` is None, uses HTTP PUT with
+          Content-Length header (no S3-level size enforcement).
+
         Args:
             file_item: File export item with path, name, and upload URL.
 
@@ -209,26 +215,50 @@ class SandboxFileSystem(ModelBase, AioHttpClientSessionClassVarMixin):
         except FileNotFoundError:
             l.error(f"Export failed: file not found: {file_item.path}/{file_item.name}")
             raise
-        except PermissionError as e:
+        except PermissionError:
             l.error(f"Export failed: permission denied: {file_item.path}/{file_item.name}")
             raise
 
-        async def file_reader() -> AsyncGenerator[bytes, None]:
-            async with aiofiles.open(source_path, 'rb') as f:
-                while chunk := await f.read(self.CHUNK_SIZE):
-                    yield chunk
-
         try:
-            async with self.http_session.put(
-                str(file_item.upload_url),
-                data=file_reader(),
-                headers={
-                    'Content-Type': 'application/octet-stream',
-                    'Content-Length': str(stat.st_size),
-                },
-                timeout=self.FILE_TRANSFER_TIMEOUT,
-            ) as response:
-                response.raise_for_status()
+            if file_item.upload_fields is not None:
+                # Presigned POST: multipart form with policy fields + file
+                # S3 POST 要求 'file' 字段放最后，策略字段在前
+                file_handle = open(source_path, 'rb')  # noqa: ASYNC230 — aiohttp FormData 内部分块读取
+                try:
+                    data = aiohttp.FormData()
+                    for field_name, field_value in file_item.upload_fields.items():
+                        data.add_field(field_name, field_value)
+                    data.add_field(
+                        'file',
+                        file_handle,
+                        filename=file_item.name,
+                        content_type='application/octet-stream',
+                    )
+                    async with self.http_session.post(
+                        str(file_item.upload_url),
+                        data=data,
+                        timeout=self.FILE_TRANSFER_TIMEOUT,
+                    ) as response:
+                        response.raise_for_status()
+                finally:
+                    file_handle.close()
+            else:
+                # Legacy PUT upload
+                async def file_reader() -> AsyncGenerator[bytes, None]:
+                    async with aiofiles.open(source_path, 'rb') as f:
+                        while chunk := await f.read(self.CHUNK_SIZE):
+                            yield chunk
+
+                async with self.http_session.put(
+                    str(file_item.upload_url),
+                    data=file_reader(),
+                    headers={
+                        'Content-Type': 'application/octet-stream',
+                        'Content-Length': str(stat.st_size),
+                    },
+                    timeout=self.FILE_TRANSFER_TIMEOUT,
+                ) as response:
+                    response.raise_for_status()
         except aiohttp.ClientError as e:
             l.error(f"Export failed (upload): {type(e).__name__}: {e}")
             raise

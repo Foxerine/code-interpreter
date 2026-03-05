@@ -201,7 +201,10 @@ class FileUploadResponse(ModelBase):
 
 class FileExportItem(SandboxFileRefBase):
     upload_url: AnyHttpUrl
-    """Presigned URL to upload to"""
+    """Presigned URL to upload to (POST URL when upload_fields is provided, PUT URL otherwise)"""
+
+    upload_fields: dict[str, str] | None = None
+    """POST form fields for presigned POST upload (includes policy, signature, etc.)"""
 
 
 class FileExportRequest(ModelBase):
