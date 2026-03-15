@@ -42,13 +42,13 @@ services:
       - INTERNET_NETWORK_NAME=code-interpreter_workers_internet_net
       - GATEWAY_INTERNET_NET_IP=172.30.0.2
       - WORKER_INTERNET_ACCESS=${WORKER_INTERNET_ACCESS:-false}
-      # --- [新增] 从宿主机环境读取配置 ---
+      # --- 从 .env 文件或宿主机环境读取配置 ---
       - AUTH_TOKEN=${AUTH_TOKEN:-}
-      - MIN_IDLE_WORKERS=${MIN_IDLE_WORKERS}
-      - MAX_TOTAL_WORKERS=${MAX_TOTAL_WORKERS}
-      - WORKER_CPU=${WORKER_CPU}
-      - WORKER_RAM_MB=${WORKER_RAM_MB}
-      - WORKER_MAX_DISK_SIZE_MB=${WORKER_MAX_DISK_SIZE_MB}
+      - MIN_IDLE_WORKERS=${MIN_IDLE_WORKERS:-2}
+      - MAX_TOTAL_WORKERS=${MAX_TOTAL_WORKERS:-8}
+      - WORKER_CPU=${WORKER_CPU:-1.5}
+      - WORKER_RAM_MB=${WORKER_RAM_MB:-1536}
+      - WORKER_MAX_DISK_SIZE_MB=${WORKER_MAX_DISK_SIZE_MB:-500}
       - WORKER_IMAGE_NAME=ghcr.io/foxerine/code-interpreter-worker:${IMAGE_TAG:-latest}
     depends_on:
       - worker # 确保 worker 镜像存在
@@ -60,6 +60,7 @@ services:
     image: ghcr.io/foxerine/code-interpreter-worker:${IMAGE_TAG:-latest}
     container_name: code-interpreter_worker_builder # 给 builder 容器一个固定名字，方便清理
     entrypoint: /bin/true # 覆盖 ENTRYPOINT，使其立即退出
+    restart: "no" # 确保 Docker 重启后不会自动启动此临时容器
     networks:
       # [更新] 只连接到内部隔离网络。这个 builder 容器本身不应需要互联网
       - code-interpreter-workers-isolated-net
